@@ -6,6 +6,7 @@ import tensorflow as tf
 from vae import VAE
 from load_data import load_data
 
+tf.logging.set_verbosity(tf.logging.INFO)
 
 def parse_args():
     parser = argparse.ArgumentParser()
@@ -47,7 +48,6 @@ def train():
 if __name__ == "__main__":
     args = parse_args()
     np.random.seed(args.seed)
-
     # does the random seed set above also set the random seed for this class instance?
     dataset = load_data(dataset=args.dataset)
 
@@ -71,10 +71,10 @@ if __name__ == "__main__":
 
         global_step = 0
         saver = tf.train.Saver()
-        summary_writer = tf.summary.FileWriter(summary_dir, sess.graph)
+        summary_writer = tf.train.SummaryWriter(summary_dir, sess.graph)
 
         # initial setup
-        sess.run(tf.global_variables_initializer())
+        sess.run(tf.initialize_all_variables())
         saver.save(sess, checkpoint_path, global_step=global_step)
 
         # num_steps = dataset.train.num_examples // args.batch_size
