@@ -4,6 +4,7 @@ from torch import nn, optim
 from torch.autograd import Variable
 from torch.nn import functional as F
 from torchvision import datasets, transforms
+from tqdm import tqdm   # Progress bar
 #from torchvision.utils import save_image
 
 class VAE_Net(nn.Module):
@@ -45,7 +46,7 @@ class VAE_Net(nn.Module):
 
         # get a N(0,1) sample in a torch/cuda tensor        
 
-        return Variable(torch.randn(self.latent).cuda())
+        return Variable(torch.randn(self.latent).cuda(), requires_grad = False)
 
     def repar(self, mu, logvar):
 
@@ -98,15 +99,16 @@ def get_data_loaders(b_size):
 
 
 
-def train(model, optimizer, train_loader, loss_func, epochs = 1):
+def train(model, optimizer, train_loader, loss_func, epochs = 1, show_prog = 100):
 
     # stolen from a generic pytorch training implementation
     # TODO: Train on different data
-
+    
     model.train()
-    for i in range(epochs):
+    for i in tqdm(range(epochs)):
         for batch_idx, (data, _ ) in enumerate(train_loader):
-            data = Variable(data).view(-1,784)  # NEED TO FLATTEN THE IMAGE FILE
+            
+            data = Variable(data, requires_grad = False).view(-1,784)  # NEED TO FLATTEN THE IMAGE FILE
             data = data.cuda()  # Make it GPU friendly
             optimizer.zero_grad()   # reset the optimzer so we don't have grad data from the previous batch
             output, mu, var = model(data)   # forward pass
@@ -114,3 +116,7 @@ def train(model, optimizer, train_loader, loss_func, epochs = 1):
             loss.backward() # back prop the loss
             optimizer.step()    # increment the optimizer based on the loss (a.k.a update params?)
             #print('Batch Training Loss is: %.6f' % loss[0])
+            if batch_idx % show_prog == 0:
+                print('Train Epoch: {} [{}/{} ({:.0f}%)]\tLoss: {:.6f}'.format(
+                    i, batch_idx * len(data), len(train_loader.dataset),
+                    100. * batch_idx / len(train_loader), loss.data[0]))
