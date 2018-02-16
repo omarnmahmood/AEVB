@@ -46,6 +46,7 @@ def train():
 
 
 if __name__ == "__main__":
+    import time; tick = time.clock()
     args = parse_args()
     np.random.seed(args.seed)
     # does the random seed set above also set the random seed for this class instance?
@@ -62,12 +63,12 @@ if __name__ == "__main__":
         os.makedirs(checkpoint_dir)
     if not os.path.exists(summary_dir):
         os.makedirs(summary_dir)
-
+    model = VAE(x_dims=dataset.train.img_dims, z_dim=args.z_dim, model_name=args.model)
     # TODO: look into session config options
     with tf.Session() as sess:
         # ISSUE: how best to allow for variable specification of the model?
         # does the random seed set above also set the random seed for this class instance?
-        model = VAE(x_dims=dataset.train.img_dims, z_dim=args.z_dim, model_name=args.model)
+        #model = VAE(x_dims=dataset.train.img_dims, z_dim=args.z_dim, model_name=args.model)
 
         global_step = 0
         saver = tf.train.Saver()
@@ -94,7 +95,10 @@ if __name__ == "__main__":
             summary_writer.add_summary(summary, global_step)
             summary_writer.flush()
 
-            if dataset.train.epochs_completed % args.checkpoint_freq == 0:
-                saver.save(sess, checkpoint_path, global_step=global_step)
+            #if dataset.train.epochs_completed % args.checkpoint_freq == 0:
+                #saver.save(sess, checkpoint_path, global_step=global_step)
 
             # TODO: add logging to stdout or a specified log directory
+    tock = time.clock()
+    with open('time_taken.txt', 'w') as f:
+        f.write(str(tock-tick))
