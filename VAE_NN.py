@@ -69,15 +69,17 @@ class VAE_Net(nn.Module):
 
 def elbo_loss(mu, logvar, x, x_pr):
 
-    # ELBO loss; NB: the L2 Part is not necessarily correct, BCE actually seems to work better for some reason?
+    # ELBO loss; NB: the L2 Part is not necessarily correct
+    # BCE actually seems to work better, which tries to minimise informtion loss (in bits) between the original and reconstruction
     # TODO: make the reconstruction error resemble the papers
 
     size = mu.size()
     KL_part = 0.5*((logvar.exp().sum() + mu.dot(mu) - size[0]*size[1] - logvar.sum()))
-    L2_part = F.mse_loss(x_pr, x, size_average=False)
+    Recon_part = F.binary_cross_entropy(x_pr, x, size_average=False)
+    #Recon_part = F.mse_loss(x_pr, x, size_average=False)
     #print('L2 loss: %.6f' % L2_part)
     #print('kL loss: %.6f' % KL_part)
-    return L2_part + KL_part
+    return Recon_part + KL_part
 
 
 
