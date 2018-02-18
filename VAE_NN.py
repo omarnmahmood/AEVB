@@ -126,7 +126,8 @@ def train(model, optimizer, train_loader, loss_func, epochs = 1, show_prog = 100
             output, mu, var = model(data)   # forward pass
             loss = loss_func(mu, var, data, output) # get the loss
             if summary:
-                writer.add_scalar('ave loss/datapoint', loss.data[0]/b_size, n_iter)
+                # write the negative log likelihood ELBO per data point to tensorboard
+                writer.add_scalar('ave loss/datapoint', -loss.data[0]/b_size, n_iter)
             loss.backward() # back prop the loss
             optimizer.step()    # increment the optimizer based on the loss (a.k.a update params?)
             #print('Batch Training Loss is: %.6f' % loss[0])
