@@ -92,5 +92,6 @@ class VAE(AbstVAE):
         tf.scalar_summary('reconstruction_loss', tf.reduce_mean(nll_loss))
         tf.scalar_summary('kl_loss', tf.reduce_mean(kl_loss))
         tf.scalar_summary('loss', self.loss)
+        tf.scalar_summary('L', -self.loss)
         tf.scalar_summary('elbo', self.elbo)
         self.merged = tf.merge_all_summaries()

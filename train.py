@@ -83,7 +83,7 @@ if __name__ == "__main__":
     logger.info("Logging results to {}".format(results_file))
     logger.info("Arguments saved to {}".format(args_file))
     with open(args_file, 'w') as f:
-        json.dump(args, f)
+        json.dump(args.__dict__, f)
     with open(results_file, 'w') as f:  # write log file as csv with header
         f.write("Epoch,Global step,Average loss,ELBO")
 
@@ -118,12 +118,10 @@ if __name__ == "__main__":
                 summary_writer.add_summary(summary, global_step)
                 summary_writer.flush()
 
-            #if dataset.train.epochs_completed % args.checkpoint_freq == 0:
-        saver.save(sess, checkpoint_path, global_step=global_step)
-
             if dataset.train.epochs_completed % args.print_freq == 0:
                 # better way of logging to stdout and a log file?
                 logger.info("Epoch: {}   Global step: {}   Average loss: {}   ELBO: {}"
                             .format(dataset.train.epochs_completed, global_step, loss, elbo))
                 with open(results_file, 'a') as f:
                     f.write("{},{},{},{}".format(dataset.train.epochs_completed, global_step, loss, elbo))
+    saver.save(sess, checkpoint_path, global_step=global_step)
