@@ -69,6 +69,7 @@ if __name__ == "__main__":
     checkpoint_path = os.path.join(checkpoint_dir, "model")
     summary_dir = os.path.join(args.experiment_dir, "summaries")
     results_file = os.path.join(args.experiment_dir, "results.csv")
+    test_results_file = os.path.join(args.experiment_dir, "test_results.csv")
     args_file = os.path.join(args.experiment_dir, "args.json")
     if not os.path.exists(args.experiment_dir):
         os.makedirs(args.experiment_dir)
@@ -106,10 +107,17 @@ if __name__ == "__main__":
             cur_epoch_completed = False  # ew
             while not cur_epoch_completed:
                 batch = dataset.train.next_batch(args.batch_size)
+                test_batch = dataset.test.next_batch(args.batch_size)
                 summary, loss, elbo, _ = sess.run(
                     [model.merged, model.loss, model.elbo, model.train_op],
                     feed_dict={
                         model.x: batch[0],
+                        model.noise: np.random.randn(args.batch_size, args.z_dim)
+                    })
+                test_summary, test_loss, test_elbo = sess.run(
+                    [model.merged, model.loss, model.elbo],
+                    feed_dict={
+                        model.x: test_batch[0],
                         model.noise: np.random.randn(args.batch_size, args.z_dim)
                     })
                 global_step += 1
@@ -124,4 +132,6 @@ if __name__ == "__main__":
                             .format(dataset.train.epochs_completed, global_step, loss, elbo))
                 with open(results_file, 'a') as f:
                     f.write("{},{},{},{}".format(dataset.train.epochs_completed, global_step, loss, elbo))
+                with open(test_results_file, 'a') as f:
+                    f.write("{},{},{},{}".format(dataset.train.epochs_completed, global_step, test_loss, test_elbo))
     saver.save(sess, checkpoint_path, global_step=global_step)
