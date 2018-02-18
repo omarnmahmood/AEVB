@@ -50,6 +50,7 @@ class Dataset:
         self._img_dims = img_dims
         self._epochs_completed = 0
         self._index_in_epoch = 0
+        self._cur_epoch_completed = False
 
     @property
     def images(self):
@@ -71,8 +72,13 @@ class Dataset:
     def epochs_completed(self):
         return self._epochs_completed
 
+    @property
+    def cur_epoch_completed(self):
+        return self._cur_epoch_completed
+
     def next_batch(self, batch_size, shuffle=True):
         start = self._index_in_epoch
+        self._cur_epoch_completed = False
 
         # shuffle for the first epoch
         if self._epochs_completed == 0 and start == 0 and shuffle:
@@ -84,6 +90,7 @@ class Dataset:
         if start + batch_size > self._num_examples:
             # finished epoch
             self._epochs_completed += 1
+            self._cur_epoch_completed = True
 
             rest_num_examples = self._num_examples - start
             images_rest_part = self._images[start:self._num_examples]
@@ -115,12 +122,12 @@ def load_data(dataset='mnist', dtype=np.float32, reshape=True, seed=123):
     # more clever way of handling this?
     if dataset == 'mnist':
         # datasets provided as tuples (imgs, labels) of data type uint8 (imgs in [0, 256])
-        train_images, train_labels = _load_mnist()
+        (train_images, train_labels), (test_images, test_labels) = _load_mnist()
     elif dataset == 'frey_face':
         # for now, returning an (n_imgs, 1) array of zeros for training labels
-        train_images, train_labels = _load_freyface()  # unlabeled dataset
+        (train_images, train_labels), (test_images, test_labels) = _load_freyface()  # unlabeled dataset
     elif dataset == 'fashion_mnist':
-        train_images, train_labels = _load_fashion_mnist()
+        (train_images, train_labels), (test_images, test_labels) = _load_fashion_mnist()
     # TODO: color images
     # loading functions for cifar10 and cifar100 work,
     #   but need to implement ability to accept color images upstream
@@ -149,9 +156,9 @@ def load_data(dataset='mnist', dtype=np.float32, reshape=True, seed=123):
 
     train = Dataset(train_images, train_labels, **options)
     # validation = Dataset(validation_images, validation_labels, **options)
-    # test = Dataset(test_images, test_labels, **options)
+    test = Dataset(test_images, test_labels, **options)
 
-    return Datasets(train=train, validation=None, test=None)
+    return Datasets(train=train, validation=None, test=test)
 
 
 def _load_mnist(path='mnist.npz'):
@@ -170,10 +177,10 @@ def _load_mnist(path='mnist.npz'):
     y_test = np.expand_dims(y_test, axis=-1)
 
     # unsupervised task
-    x_train = np.concatenate((x_train, x_test), axis=0)
-    y_train = np.concatenate((y_train, y_test), axis=0)
+    # x_train = np.concatenate((x_train, x_test), axis=0)
+    # y_train = np.concatenate((y_train, y_test), axis=0)
 
-    return x_train, y_train
+    return (x_train, y_train), (x_test, y_test)
 
 
 def _load_freyface(path='frey_rawface.mat'):
@@ -181,7 +188,7 @@ def _load_freyface(path='frey_rawface.mat'):
     path = get_file(path,
                     origin='https://cs.nyu.edu/~roweis/data/frey_rawface.mat')
     f = loadmat(path)
-    x_train = f['ff']
+    x_train = f['ff']  # TODO: test set
 
     # reformat data to match expected format
     n_imgs = x_train.shape[1]
@@ -226,10 +233,10 @@ def _load_fashion_mnist():
     y_test = np.expand_dims(y_test, axis=-1)
 
     # unsupervised task
-    x_train = np.concatenate((x_train, x_test), axis=0)
-    y_train = np.concatenate((y_train, y_test), axis=0)
+    # x_train = np.concatenate((x_train, x_test), axis=0)
+    # y_train = np.concatenate((y_train, y_test), axis=0)
 
-    return x_train, y_train
+    return (x_train, y_train), (x_test, y_test)
 
 
 def _load_cifar10():
@@ -258,10 +265,10 @@ def _load_cifar10():
     x_test = x_test.transpose(0, 2, 3, 1)
 
     # unsupervised task
-    x_train = np.concatenate((x_train, x_test), axis=0)
-    y_train = np.concatenate((y_train, y_test), axis=0)
+    # x_train = np.concatenate((x_train, x_test), axis=0)
+    # y_train = np.concatenate((y_train, y_test), axis=0)
 
-    return x_train, y_train
+    return (x_train, y_train), (x_test, y_test)
 
 
 def _load_cifar_100(label_mode='fine'):
@@ -286,10 +293,10 @@ def _load_cifar_100(label_mode='fine'):
     x_test = x_test.transpose(0, 2, 3, 1)
 
     # unsupervised task
-    x_train = np.concatenate((x_train, x_test), axis=0)
-    y_train = np.concatenate((y_train, y_test), axis=0)
+    # x_train = np.concatenate((x_train, x_test), axis=0)
+    # y_train = np.concatenate((y_train, y_test), axis=0)
 
-    return x_train, y_train
+    return (x_train, y_train), (x_test, y_test)
 
 
 # def _load_celebA():
