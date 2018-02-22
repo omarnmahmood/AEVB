@@ -78,4 +78,4 @@ if __name__ == "__main__":
 
     VAE_NN.train(vae_n,optimizer,train_data, VAE_NN.elbo_loss, epochs = args.num_epochs, summary = summary_dir)
     t_e = time.time() - t
-    print('Seconds for %d epcohs: %d' % (ep,t_e))
+    print('Seconds for %d epcohs: %d' % (args.num_epochs,t_e))
