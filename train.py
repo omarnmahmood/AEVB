@@ -71,12 +71,14 @@ if __name__ == "__main__":
     results_file = os.path.join(args.experiment_dir, "results.csv")
     test_results_file = os.path.join(args.experiment_dir, "test_results.csv")
     args_file = os.path.join(args.experiment_dir, "args.json")
+    test_summary_dir = os.path.join(args.experiment_dir, "test_summaries")
     if not os.path.exists(args.experiment_dir):
         os.makedirs(args.experiment_dir)
     if not os.path.exists(checkpoint_dir):
         os.makedirs(checkpoint_dir)
     if not os.path.exists(summary_dir):
         os.makedirs(summary_dir)
+        os.makedirs(test_summary_dir)
     if os.path.exists(results_file):
         raise AssertionError("Error: log file already exists. Change log file specification to prevent overwrite.")
     logger.info("Checkpoints saved at {}".format(checkpoint_dir))
@@ -86,6 +88,8 @@ if __name__ == "__main__":
     with open(args_file, 'w') as f:
         json.dump(args.__dict__, f)
     with open(results_file, 'w') as f:  # write log file as csv with header
+        f.write("Epoch,Global step,Average loss,ELBO")
+    with open(test_results_file, 'w') as f:  # write log file as csv with header
         f.write("Epoch,Global step,Average loss,ELBO")
 
     with tf.Session() as sess:
@@ -97,6 +101,7 @@ if __name__ == "__main__":
         global_step = 0
         saver = tf.train.Saver()
         summary_writer = tf.train.SummaryWriter(summary_dir, sess.graph)
+        test_summary_writer = tf.train.SummaryWriter(test_summary_dir, sess.graph)
 
         # initial setup
         sess.run(tf.initialize_all_variables())
@@ -107,24 +112,27 @@ if __name__ == "__main__":
             cur_epoch_completed = False  # ew
             while not cur_epoch_completed:
                 batch = dataset.train.next_batch(args.batch_size)
-                test_batch = dataset.test.next_batch(args.batch_size)
+                test_batch = dataset.test#.next_batch(args.batch_size)
                 summary, loss, elbo, _ = sess.run(
                     [model.merged, model.loss, model.elbo, model.train_op],
                     feed_dict={
                         model.x: batch[0],
                         model.noise: np.random.randn(args.batch_size, args.z_dim)
                     })
+                #import pdb; pdb.set_trace()
                 test_summary, test_loss, test_elbo = sess.run(
                     [model.merged, model.loss, model.elbo],
                     feed_dict={
-                        model.x: test_batch[0],
-                        model.noise: np.random.randn(args.batch_size, args.z_dim)
+                        model.x: test_batch._images,#[0],
+                        model.noise: np.random.randn(test_batch._images.shape[0], args.z_dim)#(args.batch_size, args.z_dim)
                     })
                 global_step += 1
                 cur_epoch_completed = dataset.train.cur_epoch_completed
 
                 summary_writer.add_summary(summary, global_step)
+                test_summary_writer.add_summary(test_summary, global_step)
                 summary_writer.flush()
+                test_summary_writer.flush()
 
             if dataset.train.epochs_completed % args.print_freq == 0:
                 # better way of logging to stdout and a log file?

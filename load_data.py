@@ -195,9 +195,13 @@ def _load_freyface(path='frey_rawface.mat'):
     x_train = x_train.transpose()
     x_train = np.reshape(x_train, tuple([n_imgs] + img_dims), order='C')
     x_train = np.expand_dims(x_train, axis=-1)
+    x_test = x_train[ int(np.floor(6/7 * np.shape(x_train)[0])): ]
+    x_train = x_train[ :int(np.floor(6/7 * np.shape(x_train)[0])) ]
+    n_imgs_test = x_test.shape[0]
+    n_imgs = x_train.shape[0]
 
     # TODO: figure out better way of handling this
-    return x_train, np.zeros(shape=(n_imgs, 1), dtype=np.uint8)
+    return (x_train, np.zeros(shape=(n_imgs, 1), dtype=np.uint8)), (x_test, np.zeros(shape=(n_imgs_test, 1), dtype=np.uint8))
 
 
 def _load_fashion_mnist():
