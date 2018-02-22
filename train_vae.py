@@ -21,10 +21,10 @@ def parse_args():
 
     #parser.add_argument('--model', type=str, default='vae', choices=['vae'],
     #                    help='type of variational autoencoder model (default: vae)')
-    #parser.add_argument('--dataset', type=str, default='mnist',
-    #                    choices=['mnist', 'frey_face', 'fashion_mnist'],
-    #                    help='dataset on which to train (default: mnist)\n' +
-   #                          'options: [mnist, frey_face, fashion_mnist, cifar10, cifar100]')
+    parser.add_argument('--dataset', type=str, default='MNIST',
+                        choices=['MNIST','Frey'],
+                        help='dataset on which to train (default: mnist)\n' +
+                             'options: [MNIST,Frey]')
 
     # TODO: input checks
     # TODO: add ability to pass hyperparameter values as a .json file
@@ -39,6 +39,8 @@ def parse_args():
                         help='number of training epochs (default: 100)')
     parser.add_argument('--batch_size', type=int, default=100,
                         help='number of samples per batch (default: 100)')
+    parser.add_argument('--init_weights', type=bool, default=False,
+                        help='initialise weights to N(0,0.01)')
     #parser.add_argument('--checkpoint_freq', type=int, default=100,
     #                    help='frequency (in epochs) with which we save model checkpoints (default: 100)')
 
@@ -65,16 +67,17 @@ if __name__ == "__main__":
     if not os.path.exists(summary_dir):
         os.makedirs(summary_dir)
 
-    vae_n = VAE_NN.VAE_Net(args.z_dim)
+    vae_n = VAE_NN.VAE_Net(args.z_dim,args.dataset)
 
     # make it trainable on the GPU
     vae_n.cuda()
-
-    vae_n.apply(VAE_NN.init_weights)
+    
+    if args.init_weights:
+        vae_n.apply(VAE_NN.init_weights)
 
     optimizer = Adam(vae_n.parameters(),lr=args.lr)
 
-    train_data,_ = VAE_NN.get_data_loaders(b_size=args.batch_size)
+    train_data,_ = VAE_NN.get_data_loaders(b_size=args.batch_size,data=args.dataset)
 
     t = time.time()
 

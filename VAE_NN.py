@@ -5,6 +5,11 @@ from torch.autograd import Variable
 from torch.nn import functional as F
 from torchvision import datasets, transforms
 from tqdm import tqdm   # Progress bar
+import numpy as np
+
+import os
+from urllib.request import urlopen
+from scipy.io import loadmat
 
 from tensorboardX import SummaryWriter
 
@@ -14,19 +19,29 @@ class VAE_Net(nn.Module):
     
     # MAIN VAE Class
 
-    def __init__(self, latent_size=20):
+    def __init__(self, latent_size=20, data='MNIST'):
         super(VAE_Net, self).__init__()
 
         # define the encoder and decoder
 
+        if data =='MNIST':
+            self.h = 28
+            self.w = 28
+            self.u = 500
+        elif data == 'Frey':
+            self.h = 28
+            self.w = 20
+            self.u = 200
+
         self.latent = latent_size
 
-        self.ei = nn.Linear(28 * 28 * 1, 500)
-        self.em = nn.Linear(500, self.latent)
-        self.ev = nn.Linear(500, self.latent)
+        self.ei = nn.Linear(self.h * self.w * 1, self.u)
+        self.em = nn.Linear(self.u, self.latent)
+        self.ev = nn.Linear(self.u, self.latent)
 
-        self.di = nn.Linear(self.latent, 500)
-        self.do = nn.Linear(500, 28 * 28 * 1)
+        self.di = nn.Linear(self.latent, self.u)
+        self.dom = nn.Linear(self.u, self.h * self.w * 1)
+        self.dov = nn.Linear(self.u, self.h * self.w * 1)
 
     def encode(self, x):
 
@@ -40,10 +55,18 @@ class VAE_Net(nn.Module):
     def decode(self, x):
 
         # decoder part    
+        
+        # THIS IS THE ORIGINAL
+        #o = F.sigmoid(self.di(x))
+        #im = F.sigmoid(self.do(o))
+        #return im
 
-        o = F.sigmoid(self.di(x))
-        im = F.sigmoid(self.do(o))
-        return im
+        o = F.tanh(self.di(x))
+        im = F.sigmoid(self.dom(o))
+        ivar = self.dov(o)
+        # print("Decoder output Mean Size:"+ " "+str(im.size())+"\n")
+        # print("Encoder output Variance Size:"+str(ivar.size())+"\n")
+        return im,ivar
 
     def sample(self):
 
@@ -64,50 +87,135 @@ class VAE_Net(nn.Module):
 
         # forward pass (take your image, get its params, reparamaterize the N(0,1) with them, decode and output)
 
+        #mu, logvar = self.encode(x)
+        #f = self.decode(self.repar(mu,logvar))
+        #return f, mu, logvar
+
         mu, logvar = self.encode(x)
-        f = self.decode(self.repar(mu,logvar))
-        return f, mu, logvar
+        om, ov = self.decode(self.repar(mu,logvar))
+        return om, ov , mu, logvar
 
 
 
-def elbo_loss(mu, logvar, x, x_pr):
+#def elbo_loss(enc_m, enc_v, x, dec_m, dec_v):
 
     # ELBO loss; NB: the L2 Part is not necessarily correct
     # BCE actually seems to work better, which tries to minimise informtion loss (in bits) between the original and reconstruction
     # TODO: make the reconstruction error resemble the papers
 
-    size = mu.size()
-    KL_part = 0.5*((logvar.exp().sum() + mu.dot(mu) - size[0]*size[1] - logvar.sum()))
-    Recon_part = F.binary_cross_entropy(x_pr, x, size_average=False)
+#    size = enc_m.size()
+#    KL_part = 0.5*((enc_v.exp().sum() + enc_m.dot(enc_m) - size[0]*size[1] - enc_v.sum()))
+#    Recon_part = F.binary_cross_entropy(dec_m, x, size_average=False)
     #Recon_part = F.mse_loss(x_pr, x, size_average=False)
     #print('L2 loss: %.6f' % L2_part)
     #print('kL loss: %.6f' % KL_part)
-    return Recon_part + KL_part
+#    return Recon_part + KL_part
+
+def elbo_loss(enc_m, enc_v, x, dec_m, dec_v, model):
+
+    # ELBO loss; NB: the L2 Part is not necessarily correct
+    # BCE actually seems to work better, which tries to minimise informtion loss (in bits) between the original and reconstruction
+    # TODO: make the reconstruction error resemble the papers
+
+    size = enc_m.size()
+    KL_part = 0.5*((enc_v.exp().sum() + enc_m.dot(enc_m) - size[0]*size[1] - enc_v.sum()))
+
+    Recon_part = torch.sum(    torch.sum(    ((x - dec_m)**2)))#*(1./dec_v.exp()),dim=1    )   )
+
+    #Pi_term = Variable((0.5 * torch.Tensor([2*np.pi]).log() * size[0]).cuda())
+    
+    #Recon_norm = torch.sum(0.5 * torch.sum(dec_v, dim = 1))
+    
+    Recon_total = Recon_part# + Recon_norm + Pi_term
+
+    #params = []
+    
+    #for layer in model.children():
+    #   params.append(torch.cat(layer.weight.data))
+
+    #params = torch.cat(params)
+
+    #Weight_reg = size[0]*(0.5*(params**2).sum()+params.size()[0]*0.5*torch.Tensor([2*np.pi]).log().sum()) # -ve sign because we minimise the NLL so we need -log(p(theta))
+
+    #print('Weight Size')
+    #print(Weight_reg)
+
+    #Weight_reg = Variable(Weight_reg.cuda())
+
+    #Recon_part = F.binary_cross_entropy(dec_m, x, size_average=False)
+    #MSE_part = F.mse_loss(dec_m, x, size_average=False)
+    #print('Recon loss: %.6f' % (Recon_part))
+    #print('KL loss: %.6f' % KL_part)
+    #print('MSE loss: %.6f' % MSE_part)
+    #print('Variance sum: %.6f' % dec_v.sum())
+
+    return(Recon_total + KL_part)# + Weight_reg)
 
 
-
-def get_data_loaders(b_size):
+def get_data_loaders(b_size, data = 'MNIST'):
 
     # downloads the MNIST data, outputs these PyTorch wrapped data loaders
     # TODO: MAKE THIS DATASET AGNOSTIC
 
     kwargs = {'num_workers': 1, 'pin_memory': True}
-    train_loader = torch.utils.data.DataLoader(
-        datasets.MNIST('../data', train=True, download=True,
-                       transform=transforms.ToTensor()),
-                        batch_size=b_size, shuffle=True, **kwargs)
-    test_loader = torch.utils.data.DataLoader(
-        datasets.MNIST('../data', train=False, download=True,
-                       transform=transforms.ToTensor()),
-                        batch_size=b_size, shuffle=True, **kwargs)
+    
+    if data == 'MNIST':
+        train_loader = torch.utils.data.DataLoader(
+            datasets.MNIST('../data', train=True, download=True,
+                           transform=transforms.ToTensor()),
+                            batch_size=b_size, shuffle=True, **kwargs)
+        test_loader = torch.utils.data.DataLoader(
+            datasets.MNIST('../data', train=False, download=True,
+                           transform=transforms.ToTensor()),
+                            batch_size=b_size, shuffle=True, **kwargs)
+    elif data == 'Frey':
+        check_frey()
+        # reshape data for later convenience
+        img_rows, img_cols = 28, 20
+        ff = loadmat('../data/frey_rawface.mat', squeeze_me=True, struct_as_record=False)
+        ff = ff["ff"].T.reshape((-1, 1, img_rows, img_cols))
+        ff = ff.astype('float32')/255.
+
+        size = len(ff)
+
+        ff = ff[:int(size/b_size)*b_size]
+
+        ff_torch = torch.from_numpy(ff)
+
+        train_loader = torch.utils.data.DataLoader(ff_torch, b_size,
+                                                   shuffle=True, **kwargs)
+        
+        test_loader = None
+        
+
     return train_loader, test_loader
 
 
+def fetch_file(url,folder):
+    """Downloads a file from a URL into a folder
+    """
+    try:
+        f = urlopen(url)
+        print("Downloading data file " + url + " ...")
+
+        # Open our local file for writing
+        with open(os.path.join(folder,os.path.basename(url)), "wb") as local_file:
+            local_file.write(f.read())
+        print("Done.")
+    except:
+        "Couldn't download data"
+
+
+def check_frey():  
+    url =  "http://www.cs.nyu.edu/~roweis/data/frey_rawface.mat"
+    data_filename = os.path.basename(url)
+    if not os.path.exists(os.path.join('../data/',data_filename)):
+        fetch_file(url,'../data/')
+    else:
+        print("Data file %s exists." % data_filename)
+
 
 def train(model, optimizer, train_loader, loss_func, epochs = 1, show_prog = 100, summary = None):
-
-    # stolen from a generic pytorch training implementation
-    # TODO: Train on different data
     
     if summary:
         writer = SummaryWriter(summary)
@@ -116,34 +224,46 @@ def train(model, optimizer, train_loader, loss_func, epochs = 1, show_prog = 100
     
     model.train()
     for i in tqdm(range(epochs)):
-        for batch_idx, (data, _ ) in enumerate(train_loader):
+        for batch_idx, (data) in enumerate(train_loader):
+
+            if type(data) == list:
+                data = data[0]
 
             n_iter = (i*len(train_loader))+batch_idx
             
-            data = Variable(data, requires_grad = False).view(-1,784)  # NEED TO FLATTEN THE IMAGE FILE
+            data = Variable(data, requires_grad = False).view(train_loader.batch_size,-1)  # NEED TO FLATTEN THE IMAGE FILE
             data = data.cuda()  # Make it GPU friendly
             optimizer.zero_grad()   # reset the optimzer so we don't have grad data from the previous batch
-            output, mu, var = model(data)   # forward pass
-            loss = loss_func(mu, var, data, output) # get the loss
+            dec_m, dec_v, enc_m, enc_v = model(data)   # forward pass
+            loss = loss_func(enc_m, enc_v, data, dec_m, dec_v, model) # get the loss
             if summary:
                 # write the negative log likelihood ELBO per data point to tensorboard
                 writer.add_scalar('ave loss/datapoint', -loss.data[0]/b_size, n_iter)
             loss.backward() # back prop the loss
             optimizer.step()    # increment the optimizer based on the loss (a.k.a update params?)
             #print('Batch Training Loss is: %.6f' % loss[0])
+            #print('-----')
+            #print('decoder mean weight sum')
+            #print(torch.sum(model.dom.weight.data))
+            #print('decoder var weight sum')
+            #print(torch.sum(model.dov.weight.data))
+            #print('decoder hidden weight sum')
+            #print(torch.sum(model.di.weight.data))
+            #print('-----')
             if batch_idx % show_prog == 0:
                 print('Train Epoch: {} [{}/{} ({:.0f}%)]\tLoss: {:.6f}'.format(
                     i, batch_idx * len(data), len(train_loader.dataset),
                     100. * batch_idx / len(train_loader), loss.data[0]))
                 if summary:
-                    writer.add_image('real_image', data[1].view(-1,28,28), n_iter)
-                    a,_,_ = model(data[1].cuda())
-                    writer.add_image('reconstruction', a.view(-1,28,28), n_iter)
-                    b = model.decode(model.sample())
-                    writer.add_image('from_noise', b.view(-1,28,28), n_iter)
+                    writer.add_image('real_image', data[1].view(-1,model.h,model.w), n_iter)
+                    a,_,_,_ = model(data[1].cuda())
+                    writer.add_image('reconstruction', a.view(-1,model.h,model.w), n_iter)
+                    b,_ = model.decode(model.sample())
+                    writer.add_image('from_noise', b.view(-1,model.h,model.w), n_iter)
+
 
 def init_weights(m):
     print("Messing with weights")
     print(m)
     if type(m) == nn.Linear:
-        m.weight.data.normal_(0,0.01)
+        m.weight.data.normal_(0.0,0.01)
