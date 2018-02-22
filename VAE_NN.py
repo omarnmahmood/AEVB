@@ -141,3 +141,9 @@ def train(model, optimizer, train_loader, loss_func, epochs = 1, show_prog = 100
                     writer.add_image('reconstruction', a.view(-1,28,28), n_iter)
                     b = model.decode(model.sample())
                     writer.add_image('from_noise', b.view(-1,28,28), n_iter)
+
+def init_weights(m):
+    print("Messing with weights")
+    print(m)
+    if type(m) == nn.Linear:
+        m.weight.data.normal_(0,0.01)

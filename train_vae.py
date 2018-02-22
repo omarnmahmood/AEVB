@@ -70,6 +70,8 @@ if __name__ == "__main__":
     # make it trainable on the GPU
     vae_n.cuda()
 
+    vae_n.apply(VAE_NN.init_weights)
+
     optimizer = Adam(vae_n.parameters(),lr=args.lr)
 
     train_data,_ = VAE_NN.get_data_loaders(b_size=args.batch_size)
