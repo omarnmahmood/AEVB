@@ -47,7 +47,7 @@ class VAE_Net(nn.Module):
 
         # encoder part
 
-        o = F.sigmoid(self.ei(x))
+        o = F.tanh(self.ei(x))
         mu = self.em(o)
         logvar = self.ev(o)
         return mu, logvar
@@ -118,29 +118,28 @@ def elbo_loss(enc_m, enc_v, x, dec_m, dec_v, model):
     # TODO: make the reconstruction error resemble the papers
 
     size = enc_m.size()
+
     KL_part = 0.5*((enc_v.exp().sum() + enc_m.dot(enc_m) - size[0]*size[1] - enc_v.sum()))
 
-    Recon_part = torch.sum(    torch.sum(    ((x - dec_m)**2)))#*(1./dec_v.exp()),dim=1    )   )
+    Recon_part = torch.sum(    torch.sum(    ((x - dec_m)**2)*(1./dec_v.exp()),dim=1    )   )
 
-    #Pi_term = Variable((0.5 * torch.Tensor([2*np.pi]).log() * size[0]).cuda())
+    Pi_term = Variable((0.5 * torch.Tensor([2*np.pi]).log() * size[0]).cuda())
     
-    #Recon_norm = torch.sum(0.5 * torch.sum(dec_v, dim = 1))
+    Recon_norm = torch.sum(0.5 * torch.sum(dec_v, dim = 1))
     
-    Recon_total = Recon_part# + Recon_norm + Pi_term
+    Recon_total = Recon_part + Recon_norm + Pi_term
 
     #params = []
     
     #for layer in model.children():
-    #   params.append(torch.cat(layer.weight.data))
+    #    params.append(torch.cat(layer.weight.data))
 
     #params = torch.cat(params)
 
-    #Weight_reg = size[0]*(0.5*(params**2).sum()+params.size()[0]*0.5*torch.Tensor([2*np.pi]).log().sum()) # -ve sign because we minimise the NLL so we need -log(p(theta))
+    #Weight_reg = size[0] * (0.5*(params**2).sum()+params.size()[0]*0.5*torch.Tensor([2*np.pi]).log().sum()) # -ve sign because we minimise the NLL so we need -log(p(theta))
 
     #print('Weight Size')
     #print(Weight_reg)
-
-    #Weight_reg = Variable(Weight_reg.cuda())
 
     #Recon_part = F.binary_cross_entropy(dec_m, x, size_average=False)
     #MSE_part = F.mse_loss(dec_m, x, size_average=False)
@@ -149,7 +148,9 @@ def elbo_loss(enc_m, enc_v, x, dec_m, dec_v, model):
     #print('MSE loss: %.6f' % MSE_part)
     #print('Variance sum: %.6f' % dec_v.sum())
 
-    return(Recon_total + KL_part)# + Weight_reg)
+    output = Recon_total + KL_part
+
+    return(output/float(size[0]))# + Weight_reg)
 
 
 def get_data_loaders(b_size, data = 'MNIST'):
@@ -221,6 +222,9 @@ def train(model, optimizer, train_loader, loss_func, epochs = 1, show_prog = 100
         writer = SummaryWriter(summary)
 
     b_size = float(train_loader.batch_size)
+
+            
+    #writer.add_graph_onnx(model)
     
     model.train()
     for i in tqdm(range(epochs)):
@@ -239,6 +243,8 @@ def train(model, optimizer, train_loader, loss_func, epochs = 1, show_prog = 100
             if summary:
                 # write the negative log likelihood ELBO per data point to tensorboard
                 writer.add_scalar('ave loss/datapoint', -loss.data[0]/b_size, n_iter)
+                w_s = torch.cat([torch.cat(layer.weight.data) for layer in model.children()]).abs().sum()
+                writer.add_scalar('sum of NN weights', w_s, n_iter)
             loss.backward() # back prop the loss
             optimizer.step()    # increment the optimizer based on the loss (a.k.a update params?)
             #print('Batch Training Loss is: %.6f' % loss[0])
@@ -264,6 +270,6 @@ def train(model, optimizer, train_loader, loss_func, epochs = 1, show_prog = 100
 
 def init_weights(m):
     print("Messing with weights")
-    print(m)
+    #print(m)
     if type(m) == nn.Linear:
         m.weight.data.normal_(0.0,0.01)

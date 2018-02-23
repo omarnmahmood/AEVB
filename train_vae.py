@@ -9,7 +9,7 @@ from torchvision import datasets, transforms
 
 import time
 
-from torch.optim import Adam
+from torch.optim import Adam, Adagrad, SGD
 
 # TODO: Make this work with the dataloader that Prof. Shen created
 
@@ -75,7 +75,9 @@ if __name__ == "__main__":
     if args.init_weights:
         vae_n.apply(VAE_NN.init_weights)
 
-    optimizer = Adam(vae_n.parameters(),lr=args.lr)
+    #optimizer = Adam(vae_n.parameters(),lr=args.lr, weight_decay = 1.0)
+
+    optimizer = Adagrad(vae_n.parameters(),lr=args.lr, weight_decay = 15.)
 
     train_data,_ = VAE_NN.get_data_loaders(b_size=args.batch_size,data=args.dataset)
 
