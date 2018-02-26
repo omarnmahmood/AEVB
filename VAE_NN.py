@@ -23,15 +23,19 @@ class VAE_Net(nn.Module):
         super(VAE_Net, self).__init__()
 
         # define the encoder and decoder
+        
+        self.data = data
 
-        if data =='MNIST':
+        if self.data =='MNIST':
             self.h = 28
             self.w = 28
             self.u = 500
-        elif data == 'Frey':
+        elif self.data == 'Frey':
             self.h = 28
             self.w = 20
             self.u = 200
+            # add variance layer for Gaussian output
+            self.dov = nn.Linear(self.u, self.h * self.w * 1)
 
         self.latent = latent_size
 
@@ -41,7 +45,7 @@ class VAE_Net(nn.Module):
 
         self.di = nn.Linear(self.latent, self.u)
         self.dom = nn.Linear(self.u, self.h * self.w * 1)
-        self.dov = nn.Linear(self.u, self.h * self.w * 1)
+
 
     def encode(self, x):
 
@@ -63,10 +67,13 @@ class VAE_Net(nn.Module):
 
         o = F.tanh(self.di(x))
         im = F.sigmoid(self.dom(o))
-        ivar = self.dov(o)
+        if self.data == 'Frey':
+            ivar = self.dov(o)
         # print("Decoder output Mean Size:"+ " "+str(im.size())+"\n")
         # print("Encoder output Variance Size:"+str(ivar.size())+"\n")
-        return im,ivar
+            return im,ivar
+        else:
+            return im, []
 
     def sample(self):
 
@@ -95,22 +102,6 @@ class VAE_Net(nn.Module):
         om, ov = self.decode(self.repar(mu,logvar))
         return om, ov , mu, logvar
 
-
-
-#def elbo_loss(enc_m, enc_v, x, dec_m, dec_v):
-
-    # ELBO loss; NB: the L2 Part is not necessarily correct
-    # BCE actually seems to work better, which tries to minimise informtion loss (in bits) between the original and reconstruction
-    # TODO: make the reconstruction error resemble the papers
-
-#    size = enc_m.size()
-#    KL_part = 0.5*((enc_v.exp().sum() + enc_m.dot(enc_m) - size[0]*size[1] - enc_v.sum()))
-#    Recon_part = F.binary_cross_entropy(dec_m, x, size_average=False)
-    #Recon_part = F.mse_loss(x_pr, x, size_average=False)
-    #print('L2 loss: %.6f' % L2_part)
-    #print('kL loss: %.6f' % KL_part)
-#    return Recon_part + KL_part
-
 def elbo_loss(enc_m, enc_v, x, dec_m, dec_v, model):
 
     # ELBO loss; NB: the L2 Part is not necessarily correct
@@ -120,29 +111,21 @@ def elbo_loss(enc_m, enc_v, x, dec_m, dec_v, model):
     size = enc_m.size()
 
     KL_part = 0.5*((enc_v.exp().sum() + enc_m.dot(enc_m) - size[0]*size[1] - enc_v.sum()))
-
-    Recon_part = torch.sum(    torch.sum(    ((x - dec_m)**2)*(1./dec_v.exp()),dim=1    )   )
-
-    Pi_term = Variable((0.5 * torch.Tensor([2*np.pi]).log() * size[0]).cuda())
     
-    Recon_norm = torch.sum(0.5 * torch.sum(dec_v, dim = 1))
+    if model.data == 'Frey':    # get the complicated Gaussian reconstruction term
+
+        Recon_part = torch.sum(    torch.sum(    ((x - dec_m)**2)*(1./dec_v.exp()),dim=1    )   )
+
+        Pi_term = Variable((0.5 * torch.Tensor([2*np.pi]).log() * size[0]).cuda())
+        
+        Recon_norm = torch.sum(0.5 * torch.sum(dec_v, dim = 1))
+        
+        Recon_total = Recon_part + Recon_norm + Pi_term
     
-    Recon_total = Recon_part + Recon_norm + Pi_term
-
-    #params = []
+    else:   # assume MNIST, therefore 'pseudo-binary'
+        
+        Recon_total = F.binary_cross_entropy(dec_m, x, size_average=False)
     
-    #for layer in model.children():
-    #    params.append(torch.cat(layer.weight.data))
-
-    #params = torch.cat(params)
-
-    #Weight_reg = size[0] * (0.5*(params**2).sum()+params.size()[0]*0.5*torch.Tensor([2*np.pi]).log().sum()) # -ve sign because we minimise the NLL so we need -log(p(theta))
-
-    #print('Weight Size')
-    #print(Weight_reg)
-
-    #Recon_part = F.binary_cross_entropy(dec_m, x, size_average=False)
-    #MSE_part = F.mse_loss(dec_m, x, size_average=False)
     #print('Recon loss: %.6f' % (Recon_part))
     #print('KL loss: %.6f' % KL_part)
     #print('MSE loss: %.6f' % MSE_part)
@@ -150,7 +133,7 @@ def elbo_loss(enc_m, enc_v, x, dec_m, dec_v, model):
 
     output = Recon_total + KL_part
 
-    return(output/float(size[0]))# + Weight_reg)
+    return(output)
 
 
 def get_data_loaders(b_size, data = 'MNIST'):
@@ -244,18 +227,9 @@ def train(model, optimizer, train_loader, loss_func, epochs = 1, show_prog = 100
                 # write the negative log likelihood ELBO per data point to tensorboard
                 writer.add_scalar('ave loss/datapoint', -loss.data[0]/b_size, n_iter)
                 w_s = torch.cat([torch.cat(layer.weight.data) for layer in model.children()]).abs().sum()
-                writer.add_scalar('sum of NN weights', w_s, n_iter)
+                writer.add_scalar('sum of NN weights', w_s, n_iter) # check for regularisation
             loss.backward() # back prop the loss
-            optimizer.step()    # increment the optimizer based on the loss (a.k.a update params?)
-            #print('Batch Training Loss is: %.6f' % loss[0])
-            #print('-----')
-            #print('decoder mean weight sum')
-            #print(torch.sum(model.dom.weight.data))
-            #print('decoder var weight sum')
-            #print(torch.sum(model.dov.weight.data))
-            #print('decoder hidden weight sum')
-            #print(torch.sum(model.di.weight.data))
-            #print('-----')
+            optimizer.step()    # increment the optimizer based on the loss (a.k.a update params)
             if batch_idx % show_prog == 0:
                 print('Train Epoch: {} [{}/{} ({:.0f}%)]\tLoss: {:.6f}'.format(
                     i, batch_idx * len(data), len(train_loader.dataset),
@@ -267,7 +241,7 @@ def train(model, optimizer, train_loader, loss_func, epochs = 1, show_prog = 100
                     b,_ = model.decode(model.sample())
                     writer.add_image('from_noise', b.view(-1,model.h,model.w), n_iter)
 
-
+# initialise the weights as per the paper
 def init_weights(m):
     print("Messing with weights")
     #print(m)
