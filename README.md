@@ -4,7 +4,7 @@ A custom implementation of AEVB/VAE in PyTorch
 
 Here are some results:
 
-<img src="Images/tSNE_20D.png =300x" alt="tSNE Decomp of 20D latent space" style="width: 200px;"/>
+<img src="Images/tSNE_20D.png" alt="tSNE Decomp of 20D latent space" style="width: 200px;"/>
 
 ![Frey Face](Images/Frey.png?raw=true "Interpolation Plot: Frey")
 
