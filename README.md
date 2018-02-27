@@ -2,7 +2,11 @@
 
 A custom implementation of AEVB/VAE in PyTorch
 
-See Notebook for results on MNIST so far (also have Frey Face results but not yet uploaded)
+Here are some results:
+
+![Frey Face](Images/Frey.png?raw=true "Interpolation Plot: Frey")
+
+![MNIST](Images/MNIST.png?raw=true "Interpolation Plot: MNIST")
 
 WIP, looking to extend in the following ways:
 * New data
