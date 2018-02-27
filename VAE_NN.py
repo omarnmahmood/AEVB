@@ -15,6 +15,7 @@ from tensorboardX import SummaryWriter
 
 #from torchvision.utils import save_image
 
+
 class VAE_Net(nn.Module):
     
     # MAIN VAE Class
@@ -39,17 +40,40 @@ class VAE_Net(nn.Module):
 
         self.latent = latent_size
 
-        self.ei = nn.Linear(self.h * self.w * 1, self.u)
+        self.cl1 = nn.Conv2d(1, 64, 7)#, stride=2)
+        self.p1 = nn.MaxPool2d(2)
+        self.cl2 = nn.Conv2d(64, 64, 3)
+        self.cl3 = nn.Conv2d(64, 128, 3)#, stride=2)
+        self.cl4 = nn.Conv2d(128, 256, 3)#, stride=2)
+        self.cl5 = nn.Conv2d(256, 512, 3)#, stride=2)
+        #self.avg_pool = nn.AvgPool2d(3)
+
+        self.ei = nn.Linear(512, self.u)#(self.h * self.w * 1, self.u)
         self.em = nn.Linear(self.u, self.latent)
         self.ev = nn.Linear(self.u, self.latent)
 
         self.di = nn.Linear(self.latent, self.u)
-        self.dom = nn.Linear(self.u, self.h * self.w * 1)
+        self.dom = nn.Linear(self.u, 512)#(self.u, self.h * self.w * 1)
+
+        self.dcl5 = nn.ConvTranspose2d(512, 256, 3)
+        self.dcl4 = nn.ConvTranspose2d(256, 128, 3)
+        self.dcl3 = nn.ConvTranspose2d(128, 64, 3)
+        self.dcl2 = nn.ConvTranspose2d(64, 64, 3)
+        self.up1 = nn.MaxUnpool2d(2)
+        self.dcl1 = nn.ConvTranspose2d(64, 1, 7)
 
 
     def encode(self, x):
 
         # encoder part
+        x = self.cl1(x)
+        x = self.p1(x)
+        x = self.cl2(x)
+        x = self.cl3(x)
+        x = self.cl4(x)
+        x = self.cl5(x)
+        self.size_before_ap = x.size()[-1]
+        x = nn.AvgPool2d(self.size_before_ap)
 
         o = F.tanh(self.ei(x))
         mu = self.em(o)
@@ -67,6 +91,15 @@ class VAE_Net(nn.Module):
 
         o = F.tanh(self.di(x))
         im = F.sigmoid(self.dom(o))
+
+        im = nn.ConvTranspose2d(512, 512, 3)(im)
+        im = self.dcl5(im)
+        im = self.dcl4(im)
+        im = self.dcl3(im)
+        im = self.dcl2(im)
+        im = self.up1(im)
+        im = self.dcl1(im)
+
         if self.data == 'Frey':
             ivar = self.dov(o)
         # print("Decoder output Mean Size:"+ " "+str(im.size())+"\n")
@@ -107,6 +140,9 @@ def elbo_loss(enc_m, enc_v, x, dec_m, dec_v, model):
     # ELBO loss; NB: the L2 Part is not necessarily correct
     # BCE actually seems to work better, which tries to minimise informtion loss (in bits) between the original and reconstruction
     # TODO: make the reconstruction error resemble the papers
+
+    dec_m = dec_m.view(dec_m.size()[0], -1)
+    x = x.view(x.size()[0], -1)
 
     size = enc_m.size()
 
@@ -218,7 +254,7 @@ def train(model, optimizer, train_loader, loss_func, epochs = 1, show_prog = 100
 
             n_iter = (i*len(train_loader))+batch_idx
             
-            data = Variable(data, requires_grad = False).view(train_loader.batch_size,-1)  # NEED TO FLATTEN THE IMAGE FILE
+            data = Variable(data, requires_grad = False)#.view(train_loader.batch_size,-1)  # NEED TO FLATTEN THE IMAGE FILE
             data = data.cuda()  # Make it GPU friendly
             optimizer.zero_grad()   # reset the optimzer so we don't have grad data from the previous batch
             dec_m, dec_v, enc_m, enc_v = model(data)   # forward pass
