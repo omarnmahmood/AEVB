@@ -40,6 +40,21 @@ class VAE_Net(nn.Module):
 
         self.latent = latent_size
 
+        self.cl1 = nn.Conv2d(1, 30, 8)
+        self.p1 = nn.MaxPool2d(3)
+        self.cl2 = nn.Conv2d(30, 80, 6)
+
+        self.ei = nn.Linear(320, self.u)
+        self.em = nn.Linear(self.u, self.latent)
+        self.ev = nn.Linear(self.u, self.latent)
+
+        self.di = nn.Linear(self.latent, self.u)
+        self.dom = nn.Linear(self.u, 320)#(self.u, self.h * self.w * 1)
+        self.dcl2 = nn.ConvTranspose2d(80, 30, 6)
+        self.up1 = nn.UpsamplingBilinear2d(scale_factor=3)
+        self.dcl1 = nn.ConvTranspose2d(30, 1, 8)
+
+        """
         self.cl1 = nn.Conv2d(1, 64, 7)#, stride=2)
         self.p1 = nn.MaxPool2d(2)
         self.cl2 = nn.Conv2d(64, 64, 3)
@@ -60,22 +75,24 @@ class VAE_Net(nn.Module):
         self.dcl4 = nn.ConvTranspose2d(256, 128, 3)
         self.dcl3 = nn.ConvTranspose2d(128, 64, 3)
         self.dcl2 = nn.ConvTranspose2d(64, 64, 3)
-        self.up1 = nn.ConvTranspose2d(64, 64, 3, stride=2)#nn.MaxUnpool2d(2)
+        self.up1 = nn.ConvTranspose2d(64, 64, 2, stride=2)#nn.MaxUnpool2d(2)
         self.dcl1 = nn.ConvTranspose2d(64, 1, 7)
+        self.softmax = nn.Softmax2d()
+        """
 
 
     def encode(self, x):
 
         # encoder part
-        x = self.cl1(x)
-        x = self.p1(x)
-        x = self.cl2(x)
-        x = self.cl3(x)
-        x = self.cl4(x)
-        x = self.cl5(x)
-        self.size_before_ap = x.size()[-1]
-        x = nn.AvgPool2d(self.size_before_ap)(x)
-        x = x.view(x.size()[0], x.size()[1])
+        x = F.relu(self.cl1(x))
+        x = F.relu(self.p1(x))
+        x = F.relu(self.cl2(x))
+        #x = self.cl3(x)
+        #x = self.cl4(x)
+        #x = self.cl5(x)
+        #self.size_before_ap = x.size()[-1]
+        #x = nn.AvgPool2d(self.size_before_ap)(x)
+        x = x.view(x.size()[0], -1)#x.size()[1])
 
         o = F.tanh(self.ei(x))
         mu = self.em(o)
@@ -93,15 +110,18 @@ class VAE_Net(nn.Module):
 
         o = F.tanh(self.di(x))
         im = F.sigmoid(self.dom(o))
+        im = im.view(im.shape[0], 80, -1)
+        im = im.view(im.shape[0], 80, int(im.shape[2]/2), int(im.shape[2]/2))
 
-        im = im.unsqueeze(-1).unsqueeze(-1)
-        im = self.avg_unpool(im)
-        im = self.dcl5(im)
-        im = self.dcl4(im)
-        im = self.dcl3(im)
-        im = self.dcl2(im)
-        im = self.up1(im)
-        im = self.dcl1(im)
+        #im = im.unsqueeze(-1).unsqueeze(-1)
+        #im = self.avg_unpool(im)
+        #im = self.dcl5(im)
+        #im = self.dcl4(im)
+        #im = self.dcl3(im)
+        im = F.relu(self.dcl2(im))
+        im = F.relu(self.up1(im))
+        im = F.sigmoid(self.dcl1(im))
+        #im = self.softmax(im)
 
         if self.data == 'Frey':
             ivar = self.dov(o)
@@ -116,6 +136,7 @@ class VAE_Net(nn.Module):
         # get a N(0,1) sample in a torch/cuda tensor        
 
         return Variable(torch.randn(self.latent).cuda(), requires_grad = False)
+        #return Variable(torch.randn(self.latent), requires_grad=False)
 
     def repar(self, mu, logvar):
 
@@ -156,6 +177,7 @@ def elbo_loss(enc_m, enc_v, x, dec_m, dec_v, model):
         Recon_part = torch.sum(    torch.sum(    ((x - dec_m)**2)*(1./dec_v.exp()),dim=1    )   )
 
         Pi_term = Variable((0.5 * torch.Tensor([2*np.pi]).log() * size[0]).cuda())
+        #Pi_term = Variable((0.5 * torch.Tensor([2 * np.pi]).log() * size[0]))
         
         Recon_norm = torch.sum(0.5 * torch.sum(dec_v, dim = 1))
         
@@ -262,11 +284,13 @@ def train(model, optimizer, train_loader, loss_func, epochs = 1, show_prog = 100
             optimizer.zero_grad()   # reset the optimzer so we don't have grad data from the previous batch
             dec_m, dec_v, enc_m, enc_v = model(data)   # forward pass
             loss = loss_func(enc_m, enc_v, data, dec_m, dec_v, model) # get the loss
+            """
             if summary:
                 # write the negative log likelihood ELBO per data point to tensorboard
                 writer.add_scalar('ave loss/datapoint', -loss.data[0]/b_size, n_iter)
                 w_s = torch.cat([torch.cat(layer.weight.data) for layer in model.children()]).abs().sum()
                 writer.add_scalar('sum of NN weights', w_s, n_iter) # check for regularisation
+            """
             loss.backward() # back prop the loss
             optimizer.step()    # increment the optimizer based on the loss (a.k.a update params)
             if batch_idx % show_prog == 0:
@@ -275,9 +299,10 @@ def train(model, optimizer, train_loader, loss_func, epochs = 1, show_prog = 100
                     100. * batch_idx / len(train_loader), loss.data[0]))
                 if summary:
                     writer.add_image('real_image', data[1].view(-1,model.h,model.w), n_iter)
-                    a,_,_,_ = model(data[1].cuda())
+                    a,_,_,_ = model(data[1].unsqueeze(0).cuda())
+                    #a, _, _, _ = model(data[1].unsqueeze(0))
                     writer.add_image('reconstruction', a.view(-1,model.h,model.w), n_iter)
-                    b,_ = model.decode(model.sample())
+                    b,_ = model.decode(model.sample().unsqueeze(0))
                     writer.add_image('from_noise', b.view(-1,model.h,model.w), n_iter)
 
 # initialise the weights as per the paper
