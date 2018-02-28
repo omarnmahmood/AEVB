@@ -55,11 +55,12 @@ class VAE_Net(nn.Module):
         self.di = nn.Linear(self.latent, self.u)
         self.dom = nn.Linear(self.u, 512)#(self.u, self.h * self.w * 1)
 
+        self.avg_unpool = nn.ConvTranspose2d(512, 512, 3)
         self.dcl5 = nn.ConvTranspose2d(512, 256, 3)
         self.dcl4 = nn.ConvTranspose2d(256, 128, 3)
         self.dcl3 = nn.ConvTranspose2d(128, 64, 3)
         self.dcl2 = nn.ConvTranspose2d(64, 64, 3)
-        self.up1 = nn.MaxUnpool2d(2)
+        self.up1 = nn.ConvTranspose2d(64, 64, 3, stride=2)#nn.MaxUnpool2d(2)
         self.dcl1 = nn.ConvTranspose2d(64, 1, 7)
 
 
@@ -73,7 +74,8 @@ class VAE_Net(nn.Module):
         x = self.cl4(x)
         x = self.cl5(x)
         self.size_before_ap = x.size()[-1]
-        x = nn.AvgPool2d(self.size_before_ap)
+        x = nn.AvgPool2d(self.size_before_ap)(x)
+        x = x.view(x.size()[0], x.size()[1])
 
         o = F.tanh(self.ei(x))
         mu = self.em(o)
@@ -92,7 +94,8 @@ class VAE_Net(nn.Module):
         o = F.tanh(self.di(x))
         im = F.sigmoid(self.dom(o))
 
-        im = nn.ConvTranspose2d(512, 512, 3)(im)
+        im = im.unsqueeze(-1).unsqueeze(-1)
+        im = self.avg_unpool(im)
         im = self.dcl5(im)
         im = self.dcl4(im)
         im = self.dcl3(im)
