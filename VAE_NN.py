@@ -297,13 +297,13 @@ def train(model, optimizer, train_loader, loss_func, epochs = 1, show_prog = 100
             optimizer.zero_grad()   # reset the optimzer so we don't have grad data from the previous batch
             dec_m, dec_v, enc_m, enc_v = model(data)   # forward pass
             loss = loss_func(enc_m, enc_v, data, dec_m, dec_v, model) # get the loss
-            """
+            
             if summary:
                 # write the negative log likelihood ELBO per data point to tensorboard
                 writer.add_scalar('ave loss/datapoint', -loss.data[0]/b_size, n_iter)
-                w_s = torch.cat([torch.cat(layer.weight.data) for layer in model.children()]).abs().sum()
-                writer.add_scalar('sum of NN weights', w_s, n_iter) # check for regularisation
-            """
+                #w_s = torch.cat([torch.cat(layer.weight.data) for layer in model.children()]).abs().sum()
+                #writer.add_scalar('sum of NN weights', w_s, n_iter) # check for regularisation
+            
             loss.backward() # back prop the loss
             optimizer.step()    # increment the optimizer based on the loss (a.k.a update params)
             if batch_idx % show_prog == 0:
