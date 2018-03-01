@@ -22,9 +22,9 @@ def parse_args():
     #parser.add_argument('--model', type=str, default='vae', choices=['vae'],
     #                    help='type of variational autoencoder model (default: vae)')
     parser.add_argument('--dataset', type=str, default='MNIST',
-                        choices=['MNIST','Frey'],
+                        choices=['MNIST','Frey', 'cifar'],
                         help='dataset on which to train (default: mnist)\n' +
-                             'options: [MNIST,Frey]')
+                             'options: [MNIST,Frey,cifar]')
 
     # TODO: input checks
     # TODO: add ability to pass hyperparameter values as a .json file
@@ -70,7 +70,7 @@ if __name__ == "__main__":
     vae_n = VAE_NN.VAE_Net(args.z_dim,args.dataset)
 
     # make it trainable on the GPU
-    vae_n.cuda()
+    #vae_n.cuda()
     
     if args.init_weights:
         vae_n.apply(VAE_NN.init_weights)

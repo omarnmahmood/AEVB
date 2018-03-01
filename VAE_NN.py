@@ -37,6 +37,10 @@ class VAE_Net(nn.Module):
             self.u = 200
             # add variance layer for Gaussian output
             self.dov = nn.Linear(self.u, self.h * self.w * 1)
+        elif self.data == 'cifar':
+            self.h = 32
+            self.w = 32
+            self.u = 200
 
         self.latent = latent_size
 
@@ -231,7 +235,16 @@ def get_data_loaders(b_size, data = 'MNIST'):
                                                    shuffle=True, **kwargs)
         
         test_loader = None
-        
+
+    elif data == 'cifar':
+        train_loader = torch.utils.data.DataLoader(
+            datasets.cifar.CIFAR10('../data', train=True, download=True,
+                           transform=transforms.ToTensor()),
+                            batch_size=b_size, shuffle=True, **kwargs)
+        test_loader = torch.utils.data.DataLoader(
+            datasets.cifar.CIFAR10('../data', train=False, download=True,
+                           transform=transforms.ToTensor()),
+                            batch_size=b_size, shuffle=True, **kwargs)
 
     return train_loader, test_loader
 
