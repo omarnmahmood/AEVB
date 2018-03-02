@@ -58,12 +58,14 @@ class VAE_Net(nn.Module):
             self.cl3 = nn.Conv2d(128, 128, 5)
             self.ei = nn.Linear(128, self.u)
             self.dom = nn.Linear(self.u, 128)
+            self.dov = nn.Linear(self.u, 128)
             self.dcl3 = nn.ConvTranspose2d(128, 128, 5)
             self.up2 = nn.UpsamplingBilinear2d(scale_factor=2)
             self.dcl2 = nn.ConvTranspose2d(128, 48, 5)
             self.up1 = nn.UpsamplingBilinear2d(scale_factor=2)
             self.dcl1 = nn.ConvTranspose2d(48, 3, 5)
             self.cl_end_shape = (128, 1, 1)
+
 
 
         self.latent = latent_size
@@ -157,8 +159,20 @@ class VAE_Net(nn.Module):
             im = F.sigmoid(self.dcl1(im))
         #im = self.softmax(im)
 
-        if self.data == 'Frey':
+        if self.data == 'Frey' or self.data == 'cifar':
             ivar = self.dov(o)
+            if self.cl_end_shape:
+                ivar = ivar.view(-1, self.cl_end_shape[0], self.cl_end_shape[1], self.cl_end_shape[2])
+            if hasattr(self, 'dcl3'):
+                ivar = F.relu(self.dcl3(ivar))
+            if hasattr(self, 'up2'):
+                ivar = F.relu(self.up2(ivar))
+            if hasattr(self, 'dcl2'):
+                ivar = F.relu(self.dcl2(ivar))
+            if hasattr(self, 'up1'):
+                ivar = F.relu(self.up1(ivar))
+            if hasattr(self, 'dcl1'):
+                ivar = F.sigmoid(self.dcl1(ivar))
         # print("Decoder output Mean Size:"+ " "+str(im.size())+"\n")
         # print("Encoder output Variance Size:"+str(ivar.size())+"\n")
             return im,ivar
@@ -200,14 +214,14 @@ def elbo_loss(enc_m, enc_v, x, dec_m, dec_v, model):
     # BCE actually seems to work better, which tries to minimise informtion loss (in bits) between the original and reconstruction
     # TODO: make the reconstruction error resemble the papers
 
-    dec_m = dec_m.view(dec_m.size()[0], -1)
-    x = x.view(x.size()[0], -1)
+    #dec_m = dec_m.view(dec_m.size()[0], -1)
+    #x = x.view(x.size()[0], -1)
 
     size = enc_m.size()
 
     KL_part = 0.5*((enc_v.exp().sum() + enc_m.dot(enc_m) - size[0]*size[1] - enc_v.sum()))
     
-    if model.data == 'Frey':    # get the complicated Gaussian reconstruction term
+    if model.data == 'Frey' or model.data == 'cifar':    # get the complicated Gaussian reconstruction term
 
         Recon_part = torch.sum(    torch.sum(    ((x - dec_m)**2)*(1./dec_v.exp()),dim=1    )   )
         if GPU:
