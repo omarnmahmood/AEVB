@@ -223,9 +223,9 @@ def elbo_loss(enc_m, enc_v, x, dec_m, dec_v, model):
 
     dec_m = dec_m.view(dec_m.size()[0], -1)
     x = x.view(x.size()[0], -1)
-    enc_m = enc_m.view(x.size()[0], -1)
-    enc_v = enc_v.view(x.size()[0], -1)
-    dec_v = dec_v.view(x.size()[0], -1)
+    enc_m = enc_m.view(enc_m.size()[0], -1)
+    enc_v = enc_v.view(enc_v.size()[0], -1)
+    dec_v = dec_v.view(dec_v.size()[0], -1)
 
     size = enc_m.size()
 
