@@ -52,23 +52,24 @@ class VAE_Net(nn.Module):
             self.w = 32
             self.u = 200
             self.cl1 = nn.Conv2d(3, 48, 5)
-            #self.p1 = nn.AvgPool2d(2)
+            self.p1 = nn.AvgPool2d(2)
             self.cl2 = nn.Conv2d(48, 128, 5)
-            #self.p2 = nn.AvgPool2d(2)
+            self.p2 = nn.AvgPool2d(2)
             self.cl3 = nn.Conv2d(128, 128, 5)
-            self.ei = nn.Linear(51200, self.u)
-            #self.ei = nn.Linear(128, self.u)
-            #self.dom = nn.Linear(self.u, 128)
-            #self.dov = nn.Linear(self.u, 128)
-            self.dom = nn.Linear(self.u, 51200)
-            self.dov = nn.Linear(self.u, 51200)
+            #self.ei = nn.Linear(51200, self.u)
+            self.ei = nn.Linear(128, self.u)
+            self.dom = nn.Linear(self.u, 128)
+            #self.dov = nn.Linear(self.u, 128) # for convolutional
+            self.dov = nn.Linear(self.u, self.h*self.w*3)
+            #self.dom = nn.Linear(self.u, 51200)
+            #self.dov = nn.Linear(self.u, 51200)
             self.dcl3 = nn.ConvTranspose2d(128, 128, 5)
-            #self.up2 = nn.UpsamplingBilinear2d(scale_factor=2)
+            self.up2 = nn.UpsamplingBilinear2d(scale_factor=2)
             self.dcl2 = nn.ConvTranspose2d(128, 48, 5)
-            #self.up1 = nn.UpsamplingBilinear2d(scale_factor=2)
+            self.up1 = nn.UpsamplingBilinear2d(scale_factor=2)
             self.dcl1 = nn.ConvTranspose2d(48, 3, 5)
-            #self.cl_end_shape = (128, 1, 1)
-            self.cl_end_shape = (128, 20, 20)
+            self.cl_end_shape = (128, 1, 1)
+            #self.cl_end_shape = (128, 20, 20)
 
 
 
@@ -165,6 +166,7 @@ class VAE_Net(nn.Module):
 
         if self.data == 'Frey' or self.data == 'cifar':
             ivar = self.dov(o)
+            """
             if self.cl_end_shape:
                 ivar = ivar.view(-1, self.cl_end_shape[0], self.cl_end_shape[1], self.cl_end_shape[2])
             if hasattr(self, 'dcl3'):
@@ -177,6 +179,7 @@ class VAE_Net(nn.Module):
                 ivar = F.relu(self.up1(ivar))
             if hasattr(self, 'dcl1'):
                 ivar = F.sigmoid(self.dcl1(ivar))
+            """
         # print("Decoder output Mean Size:"+ " "+str(im.size())+"\n")
         # print("Encoder output Variance Size:"+str(ivar.size())+"\n")
             return im,ivar
@@ -218,8 +221,11 @@ def elbo_loss(enc_m, enc_v, x, dec_m, dec_v, model):
     # BCE actually seems to work better, which tries to minimise informtion loss (in bits) between the original and reconstruction
     # TODO: make the reconstruction error resemble the papers
 
-    #dec_m = dec_m.view(dec_m.size()[0], -1)
-    #x = x.view(x.size()[0], -1)
+    dec_m = dec_m.view(dec_m.size()[0], -1)
+    x = x.view(x.size()[0], -1)
+    enc_m = enc_m.view(x.size()[0], -1)
+    enc_v = enc_v.view(x.size()[0], -1)
+    dec_v = dec_v.view(x.size()[0], -1)
 
     size = enc_m.size()
 
