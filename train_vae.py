@@ -41,10 +41,16 @@ def parse_args():
                         help='number of samples per batch (default: 100)')
     parser.add_argument('--init_weights', type=bool, default=False,
                         help='initialise weights to N(0,0.01)')
+    parser.add_argument('--test', type=bool, default=False,
+                        help='also benchmark against test')
+    parser.add_argument('--conditional', type=bool, default=False,
+                        help='use label data (if available)')
     #parser.add_argument('--checkpoint_freq', type=int, default=100,
     #                    help='frequency (in epochs) with which we save model checkpoints (default: 100)')
 
     # also allow specification of optimizer to use?
+    parser.add_argument('--optimiser', type=str, default='Adam',
+                        help = 'choose the optimiser')
     parser.add_argument('--lr', type=float, default=1e-3, help='learning rate (default: 1e-3)')
     parser.add_argument('--z_dim', type=int, default=20, help='dimensionality of latent variable')
 
@@ -67,7 +73,7 @@ if __name__ == "__main__":
     if not os.path.exists(summary_dir):
         os.makedirs(summary_dir)
 
-    vae_n = VAE_NN.VAE_Net(args.z_dim,args.dataset)
+    vae_n = VAE_NN.VAE_Net(args.z_dim,args.dataset,args.conditional)
 
     # make it trainable on the GPU
     vae_n.cuda()
@@ -75,14 +81,18 @@ if __name__ == "__main__":
     if args.init_weights:
         vae_n.apply(VAE_NN.init_weights)
 
-    #optimizer = Adam(vae_n.parameters(),lr=args.lr, weight_decay = 1.0)
+    if args.optimiser == 'Adam':
+        optimizer = Adam(vae_n.parameters(),lr=args.lr)
+    elif args.optimiser == 'Adagrad':
+        optimizer = Adagrad(vae_n.parameters(),lr=args.lr)
 
-    optimizer = Adam(vae_n.parameters(),lr=args.lr)
+    train_data,test_data = VAE_NN.get_data_loaders(b_size=args.batch_size,data=args.dataset)
 
-    train_data,_ = VAE_NN.get_data_loaders(b_size=args.batch_size,data=args.dataset)
+    if not args.test:
+        test_data = None
 
     t = time.time()
 
-    VAE_NN.train(vae_n,optimizer,train_data, VAE_NN.elbo_loss, epochs = args.num_epochs, summary = summary_dir)
+    VAE_NN.train(vae_n,optimizer,train_data, VAE_NN.elbo_loss, epochs = args.num_epochs, summary = summary_dir, test_loader = test_data)
     t_e = time.time() - t
     print('Seconds for %d epcohs: %d' % (args.num_epochs,t_e))
