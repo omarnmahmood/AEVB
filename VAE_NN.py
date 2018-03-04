@@ -16,7 +16,7 @@ from tensorboardX import SummaryWriter
 
 #from torchvision.utils import save_image
 
-GPU = False
+GPU = True
 
 class VAE_Net(nn.Module):
     
@@ -303,7 +303,7 @@ def train(model, optimizer, train_loader, loss_func, epochs = 1, show_prog = 100
                 data = data[0]
 
             n_iter = (i*len(train_loader))+batch_idx
-
+            print('Reshaping image')
             pca = PCA(pca_dim)
             original_shape = data.shape
             num_pixels = 1
@@ -313,10 +313,10 @@ def train(model, optimizer, train_loader, loss_func, epochs = 1, show_prog = 100
             flattened_data = data[0].view(num_pixels).numpy()
             for img in data[1:]:
                 flattened_data = np.vstack([flattened_data, img.view(num_pixels).numpy()])
-
+            print('Doing PCA')
             data = pca.fit_transform(flattened_data)
             data = torch.from_numpy(data)
-
+            print('Training')
             data = Variable(data, requires_grad = False)#.view(train_loader.batch_size,-1)  # NEED TO FLATTEN THE IMAGE FILE
             if GPU:
                 data = data.cuda()  # Make it GPU friendly
@@ -337,9 +337,13 @@ def train(model, optimizer, train_loader, loss_func, epochs = 1, show_prog = 100
                     i, batch_idx * len(data), len(train_loader.dataset),
                     100. * batch_idx / len(train_loader), loss.data[0]))
                 if summary:
+                    print('Doing inverse PCA')
                     data = pca.inverse_transform(data)
+                    print('Reshaping data to original form')
                     data.shape = original_shape
                     data = torch.from_numpy(data)
+                    print('Writing images')
+                    if GPU: data = data.cuda()
                     writer.add_image('real_image', data[1].view(-1,model.h,model.w), n_iter)
                     if GPU:
                         a,_,_,_ = model(data[1].unsqueeze(0).cuda())

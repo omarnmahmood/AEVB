@@ -71,7 +71,7 @@ if __name__ == "__main__":
     vae_n = VAE_NN.VAE_Net(args.z_dim,args.dataset, pca_dim=args.pca_dim)
 
     # make it trainable on the GPU
-    #vae_n.cuda()
+    vae_n.cuda()
     
     if args.init_weights:
         vae_n.apply(VAE_NN.init_weights)
