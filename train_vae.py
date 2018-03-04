@@ -37,7 +37,7 @@ def parse_args():
     #parser.add_argument('--seed', type=int, default=123, help='seed for rng (default: 123)')
     parser.add_argument('--num_epochs', type=int, default=100,
                         help='number of training epochs (default: 100)')
-    parser.add_argument('--batch_size', type=int, default=100,
+    parser.add_argument('--batch_size', type=int, default=500,
                         help='number of samples per batch (default: 100)')
     parser.add_argument('--init_weights', type=bool, default=False,
                         help='initialise weights to N(0,0.01)')
@@ -47,6 +47,7 @@ def parse_args():
     # also allow specification of optimizer to use?
     parser.add_argument('--lr', type=float, default=1e-3, help='learning rate (default: 1e-3)')
     parser.add_argument('--z_dim', type=int, default=20, help='dimensionality of latent variable')
+    parser.add_argument('--pca_dim', type=int, default=500, help='number of principal components')
 
     return parser.parse_args()
 
@@ -67,7 +68,7 @@ if __name__ == "__main__":
     if not os.path.exists(summary_dir):
         os.makedirs(summary_dir)
 
-    vae_n = VAE_NN.VAE_Net(args.z_dim,args.dataset)
+    vae_n = VAE_NN.VAE_Net(args.z_dim,args.dataset, pca_dim=args.pca_dim)
 
     # make it trainable on the GPU
     #vae_n.cuda()
@@ -83,6 +84,6 @@ if __name__ == "__main__":
 
     t = time.time()
 
-    VAE_NN.train(vae_n,optimizer,train_data, VAE_NN.elbo_loss, epochs = args.num_epochs, summary = summary_dir)
+    VAE_NN.train(vae_n,optimizer,train_data, VAE_NN.elbo_loss, epochs = args.num_epochs, summary = summary_dir, pca_dim=args.pca_dim)
     t_e = time.time() - t
     print('Seconds for %d epcohs: %d' % (args.num_epochs,t_e))

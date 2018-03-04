@@ -6,6 +6,7 @@ from torch.nn import functional as F
 from torchvision import datasets, transforms
 from tqdm import tqdm   # Progress bar
 import numpy as np
+from sklearn.decomposition.pca import PCA
 
 import os
 from urllib.request import urlopen
@@ -21,12 +22,13 @@ class VAE_Net(nn.Module):
     
     # MAIN VAE Class
 
-    def __init__(self, latent_size=20, data='MNIST'):
+    def __init__(self, latent_size=20, data='MNIST', pca_dim=500):
         super(VAE_Net, self).__init__()
 
         # define the encoder and decoder
         
         self.data = data
+        self.pca_dim = pca_dim
 
         if self.data =='MNIST':
             self.h = 28
@@ -51,54 +53,9 @@ class VAE_Net(nn.Module):
             self.h = 32
             self.w = 32
             self.u = 500
-            if False:
-                self.cl1 = nn.Conv2d(3, 48, 5)
-                self.p1 = nn.AvgPool2d(2)
-                self.cl2 = nn.Conv2d(48, 128, 5)
-                self.p2 = nn.AvgPool2d(2)
-                self.cl3 = nn.Conv2d(128, 128, 5)
-                #self.ei = nn.Linear(51200, self.u)
-                self.ei = nn.Linear(128, self.u)
-                self.dom = nn.Linear(self.u, 128)
-                #self.dov = nn.Linear(self.u, 128) # for convolutional
-                self.dov = nn.Linear(self.u, self.h*self.w*3)
-                #self.dom = nn.Linear(self.u, 51200)
-                #self.dov = nn.Linear(self.u, 51200)
-                self.dcl3 = nn.ConvTranspose2d(128, 128, 5)
-                self.up2 = nn.UpsamplingBilinear2d(scale_factor=2)
-                self.dcl2 = nn.ConvTranspose2d(128, 48, 5)
-                self.up1 = nn.UpsamplingBilinear2d(scale_factor=2)
-                self.dcl1 = nn.ConvTranspose2d(48, 3, 5)
-                self.cl_end_shape = (128, 1, 1)
-                #self.cl_end_shape = (128, 20, 20)
-            else:
-                self.cl1 = nn.Conv2d(3, 32, 3)
-                self.p1 = nn.MaxPool2d(2)
-                self.cl2 = nn.Conv2d(32, 64, 2)
-                #self.p2 = nn.MaxPool2d(2)
-                self.cl3 = nn.Conv2d(64, 128, 3)
-                self.p3 = nn.MaxPool2d(2)
-                self.cl4 = nn.Conv2d(128, 128, 3)
-                self.p4 = nn.MaxPool2d(2)
-                self.cl5 = nn.Conv2d(128, 128, 2)
-                #self.ei = nn.Linear(51200, self.u)
-                self.ei = nn.Linear(128, self.u)
-                self.dom = nn.Linear(self.u, 128)
-                self.dov = nn.Linear(self.u, 128) # for convolutional
-                #self.dov = nn.Linear(self.u, self.h*self.w*3)
-                #self.dom = nn.Linear(self.u, 51200)
-                #self.dov = nn.Linear(self.u, 51200)
-                self.dcl5 = nn.ConvTranspose2d(128, 128, 2)
-                self.up4 = nn.Upsample(scale_factor=2)
-                self.dcl4 = nn.ConvTranspose2d(128, 128, 3)
-                self.up3 = nn.Upsample(scale_factor=2)
-                self.dcl3 = nn.ConvTranspose2d(128, 64, 3)
-                #self.up2 = nn.Upsample(scale_factor=2)
-                self.dcl2 = nn.ConvTranspose2d(64, 32, 2)
-                self.up1 = nn.Upsample(scale_factor=2)
-                self.dcl1 = nn.ConvTranspose2d(32, 3, 3)
-                self.cl_end_shape = (128, 1, 1)
-                #self.cl_end_shape = (128, 20, 20)
+            self.ei = nn.Linear(self.pca_dim, self.u)
+            self.dom = nn.Linear(self.u, self.pca_dim)
+            self.dov = nn.Linear(self.u, self.pca_dim)
 
 
 
@@ -140,8 +97,6 @@ class VAE_Net(nn.Module):
     def encode(self, x):
 
         # encoder part
-        x = self.apply_layers(x, 5, 'cl', 'p')
-        x = x.view(x.size()[0], -1)#x.size()[1])
 
         o = F.tanh(self.ei(x))
         mu = self.em(o)
@@ -159,16 +114,10 @@ class VAE_Net(nn.Module):
 
         o = F.tanh(self.di(x))
         im = F.sigmoid(self.dom(o))
-        if self.cl_end_shape:
-            im = im.view(-1, self.cl_end_shape[0], self.cl_end_shape[1], self.cl_end_shape[2])
-        im = self.apply_layers(im, 5, 'dcl', 'up')
 
         if self.data == 'Frey' or self.data == 'cifar':
             ivar = self.dov(o)
 
-            if self.cl_end_shape:
-                ivar = ivar.view(-1, self.cl_end_shape[0], self.cl_end_shape[1], self.cl_end_shape[2])
-            ivar = self.apply_layers(ivar, 5, 'dcl', 'up')
 
         # print("Decoder output Mean Size:"+ " "+str(im.size())+"\n")
         # print("Encoder output Variance Size:"+str(ivar.size())+"\n")
@@ -233,12 +182,6 @@ def elbo_loss(enc_m, enc_v, x, dec_m, dec_v, model):
     # ELBO loss; NB: the L2 Part is not necessarily correct
     # BCE actually seems to work better, which tries to minimise informtion loss (in bits) between the original and reconstruction
     # TODO: make the reconstruction error resemble the papers
-
-    dec_m = dec_m.view(dec_m.size()[0], -1)
-    x = x.view(x.size()[0], -1)
-    enc_m = enc_m.view(enc_m.size()[0], -1)
-    enc_v = enc_v.view(enc_v.size()[0], -1)
-    dec_v = dec_v.view(dec_v.size()[0], -1)
 
     size = enc_m.size()
 
@@ -342,7 +285,7 @@ def check_frey():
         print("Data file %s exists." % data_filename)
 
 
-def train(model, optimizer, train_loader, loss_func, epochs = 1, show_prog = 100, summary = None):
+def train(model, optimizer, train_loader, loss_func, epochs = 1, show_prog = 100, summary = None, pca_dim=500):
     
     if summary:
         writer = SummaryWriter(summary)
@@ -360,7 +303,20 @@ def train(model, optimizer, train_loader, loss_func, epochs = 1, show_prog = 100
                 data = data[0]
 
             n_iter = (i*len(train_loader))+batch_idx
-            
+
+            pca = PCA(pca_dim)
+            original_shape = data.shape
+            num_pixels = 1
+            for dim in original_shape[1:]:
+                num_pixels *= dim
+
+            flattened_data = data[0].view(num_pixels).numpy()
+            for img in data[1:]:
+                flattened_data = np.vstack([flattened_data, img.view(num_pixels).numpy()])
+
+            data = pca.fit_transform(flattened_data)
+            data = torch.from_numpy(data)
+
             data = Variable(data, requires_grad = False)#.view(train_loader.batch_size,-1)  # NEED TO FLATTEN THE IMAGE FILE
             if GPU:
                 data = data.cuda()  # Make it GPU friendly
@@ -381,6 +337,9 @@ def train(model, optimizer, train_loader, loss_func, epochs = 1, show_prog = 100
                     i, batch_idx * len(data), len(train_loader.dataset),
                     100. * batch_idx / len(train_loader), loss.data[0]))
                 if summary:
+                    data = pca.inverse_transform(data)
+                    data.shape = original_shape
+                    data = torch.from_numpy(data)
                     writer.add_image('real_image', data[1].view(-1,model.h,model.w), n_iter)
                     if GPU:
                         a,_,_,_ = model(data[1].unsqueeze(0).cuda())
