@@ -14,7 +14,7 @@ from torch.optim import Adam, Adagrad, SGD
 # TODO: Make this work with the dataloader that Prof. Shen created
 
 #from load_data import load_data
-
+from sklearn.externals import joblib
 
 def parse_args():
     parser = argparse.ArgumentParser()
@@ -48,6 +48,7 @@ def parse_args():
     parser.add_argument('--lr', type=float, default=1e-3, help='learning rate (default: 1e-3)')
     parser.add_argument('--z_dim', type=int, default=20, help='dimensionality of latent variable')
     parser.add_argument('--pca_dim', type=int, default=500, help='number of principal components')
+    parser.add_argument('--pca_model', type=str, default='pca500_cifar.sav', help='pca model')
 
     return parser.parse_args()
 
@@ -72,7 +73,7 @@ if __name__ == "__main__":
 
     # make it trainable on the GPU
     #vae_n.cuda()
-    
+    pca = joblib.load(args.pca_model)
     if args.init_weights:
         vae_n.apply(VAE_NN.init_weights)
 
@@ -84,6 +85,6 @@ if __name__ == "__main__":
 
     t = time.time()
 
-    VAE_NN.train(vae_n,optimizer,train_data, VAE_NN.elbo_loss, epochs = args.num_epochs, summary = summary_dir, pca_dim=args.pca_dim)
+    VAE_NN.train(vae_n,optimizer,train_data, VAE_NN.elbo_loss, epochs = args.num_epochs, summary = summary_dir, pca_model=pca)
     t_e = time.time() - t
     print('Seconds for %d epcohs: %d' % (args.num_epochs,t_e))

@@ -285,7 +285,7 @@ def check_frey():
         print("Data file %s exists." % data_filename)
 
 
-def train(model, optimizer, train_loader, loss_func, epochs = 1, show_prog = 100, summary = None, pca_dim=500):
+def train(model, optimizer, train_loader, loss_func, epochs = 1, show_prog = 100, summary = None, pca_model=None):
     
     if summary:
         writer = SummaryWriter(summary)
@@ -303,18 +303,14 @@ def train(model, optimizer, train_loader, loss_func, epochs = 1, show_prog = 100
                 data = data[0]
 
             n_iter = (i*len(train_loader))+batch_idx
-            print('Reshaping image')
-            pca = PCA(pca_dim)
+            #print('Reshaping image')
             original_data = data
-            original_shape = data.shape
 
-            flattened_data = data[0].view(-1).numpy()
-            for img in data[1:]:
-                flattened_data = np.vstack([flattened_data, img.view(-1).numpy()])
-            print('Doing PCA')
-            data = pca.fit_transform(flattened_data)
+            flattened_data = data.view(data.shape[0], -1).numpy()
+            #print('Applying PCA')
+            data = pca_model.transform(flattened_data)
             data = torch.from_numpy(data)
-            print('Training')
+            #print('Training')
             data = Variable(data, requires_grad = False)#.view(train_loader.batch_size,-1)  # NEED TO FLATTEN THE IMAGE FILE
             if GPU:
                 original_data = original_data.cuda()
@@ -341,13 +337,13 @@ def train(model, optimizer, train_loader, loss_func, epochs = 1, show_prog = 100
                         a,_,_,_ = model(data[1].unsqueeze(0).cuda())
                     else:
                         a, _, _, _ = model(data[1].unsqueeze(0))
-                    reconstructed_image = pca.inverse_transform(a.data.numpy())
+                    reconstructed_image = pca_model.inverse_transform(a.data.numpy())
                     reconstructed_image = torch.from_numpy(reconstructed_image).view(-1,model.h,model.w)
                     if GPU:
                         reconstructed_image = reconstructed_image.cuda()
                     writer.add_image('reconstruction', reconstructed_image, n_iter)
                     b,_ = model.decode(model.sample().unsqueeze(0))
-                    generated_image = pca.inverse_transform(b.data.numpy())
+                    generated_image = pca_model.inverse_transform(b.data.numpy())
                     generated_image = torch.from_numpy(generated_image).view(-1, model.h, model.w)
                     writer.add_image('from_noise', generated_image, n_iter)
 
