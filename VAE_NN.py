@@ -51,25 +51,50 @@ class VAE_Net(nn.Module):
             self.h = 32
             self.w = 32
             self.u = 200
-            self.cl1 = nn.Conv2d(3, 48, 5)
-            self.p1 = nn.AvgPool2d(2)
-            self.cl2 = nn.Conv2d(48, 128, 5)
-            self.p2 = nn.AvgPool2d(2)
-            self.cl3 = nn.Conv2d(128, 128, 5)
-            #self.ei = nn.Linear(51200, self.u)
-            self.ei = nn.Linear(128, self.u)
-            self.dom = nn.Linear(self.u, 128)
-            #self.dov = nn.Linear(self.u, 128) # for convolutional
-            self.dov = nn.Linear(self.u, self.h*self.w*3)
-            #self.dom = nn.Linear(self.u, 51200)
-            #self.dov = nn.Linear(self.u, 51200)
-            self.dcl3 = nn.ConvTranspose2d(128, 128, 5)
-            self.up2 = nn.UpsamplingBilinear2d(scale_factor=2)
-            self.dcl2 = nn.ConvTranspose2d(128, 48, 5)
-            self.up1 = nn.UpsamplingBilinear2d(scale_factor=2)
-            self.dcl1 = nn.ConvTranspose2d(48, 3, 5)
-            self.cl_end_shape = (128, 1, 1)
-            #self.cl_end_shape = (128, 20, 20)
+            if False:
+                self.cl1 = nn.Conv2d(3, 48, 5)
+                self.p1 = nn.AvgPool2d(2)
+                self.cl2 = nn.Conv2d(48, 128, 5)
+                self.p2 = nn.AvgPool2d(2)
+                self.cl3 = nn.Conv2d(128, 128, 5)
+                #self.ei = nn.Linear(51200, self.u)
+                self.ei = nn.Linear(128, self.u)
+                self.dom = nn.Linear(self.u, 128)
+                #self.dov = nn.Linear(self.u, 128) # for convolutional
+                self.dov = nn.Linear(self.u, self.h*self.w*3)
+                #self.dom = nn.Linear(self.u, 51200)
+                #self.dov = nn.Linear(self.u, 51200)
+                self.dcl3 = nn.ConvTranspose2d(128, 128, 5)
+                self.up2 = nn.UpsamplingBilinear2d(scale_factor=2)
+                self.dcl2 = nn.ConvTranspose2d(128, 48, 5)
+                self.up1 = nn.UpsamplingBilinear2d(scale_factor=2)
+                self.dcl1 = nn.ConvTranspose2d(48, 3, 5)
+                self.cl_end_shape = (128, 1, 1)
+                #self.cl_end_shape = (128, 20, 20)
+            else:
+                self.cl1 = nn.Conv2d(3, 32, 3)
+                self.p1 = nn.MaxPool2d(2)
+                self.cl2 = nn.Conv2d(32, 64, 4)
+                self.p2 = nn.MaxPool2d(2)
+                self.cl3 = nn.Conv2d(64, 128, 3)
+                self.p3 = nn.MaxPool2d(2)
+                self.cl4 = nn.Conv2d(128, 128, 2)
+                #self.ei = nn.Linear(51200, self.u)
+                self.ei = nn.Linear(128, self.u)
+                self.dom = nn.Linear(self.u, 128)
+                self.dov = nn.Linear(self.u, 128) # for convolutional
+                #self.dov = nn.Linear(self.u, self.h*self.w*3)
+                #self.dom = nn.Linear(self.u, 51200)
+                #self.dov = nn.Linear(self.u, 51200)
+                self.dcl4 = nn.ConvTranspose2d(128, 128, 2)
+                self.up3 = nn.Upsample(scale_factor=2)
+                self.dcl3 = nn.ConvTranspose2d(128, 64, 3)
+                self.up2 = nn.Upsample(scale_factor=2)
+                self.dcl2 = nn.ConvTranspose2d(64, 32, 4)
+                self.up1 = nn.Upsample(scale_factor=2)
+                self.dcl1 = nn.ConvTranspose2d(32, 3, 3)
+                self.cl_end_shape = (128, 1, 1)
+                #self.cl_end_shape = (128, 20, 20)
 
 
 
@@ -121,6 +146,10 @@ class VAE_Net(nn.Module):
             x = F.relu(self.p2(x))
         if hasattr(self, 'cl3'):
             x = F.relu(self.cl3(x))
+        if hasattr(self, 'p3'):
+            x = F.relu(self.p3(x))
+        if hasattr(self, 'cl4'):
+            x = F.relu(self.cl4(x))
         #x = self.cl3(x)
         #x = self.cl4(x)
         #x = self.cl5(x)
@@ -152,6 +181,10 @@ class VAE_Net(nn.Module):
         #im = self.dcl5(im)
         #im = self.dcl4(im)
         #im = self.dcl3(im)
+        if hasattr(self, 'dcl4'):
+            im = F.relu(self.dcl4(im))
+        if hasattr(self, 'up3'):
+            im = F.relu(self.up3(im))
         if hasattr(self, 'dcl3'):
             im = F.relu(self.dcl3(im))
         if hasattr(self, 'up2'):
@@ -166,9 +199,13 @@ class VAE_Net(nn.Module):
 
         if self.data == 'Frey' or self.data == 'cifar':
             ivar = self.dov(o)
-            """
+
             if self.cl_end_shape:
                 ivar = ivar.view(-1, self.cl_end_shape[0], self.cl_end_shape[1], self.cl_end_shape[2])
+            if hasattr(self, 'dcl4'):
+                ivar = F.relu(self.dcl4(ivar))
+            if hasattr(self, 'up3'):
+                ivar = F.relu(self.up3(ivar))
             if hasattr(self, 'dcl3'):
                 ivar = F.relu(self.dcl3(ivar))
             if hasattr(self, 'up2'):
@@ -179,7 +216,7 @@ class VAE_Net(nn.Module):
                 ivar = F.relu(self.up1(ivar))
             if hasattr(self, 'dcl1'):
                 ivar = F.sigmoid(self.dcl1(ivar))
-            """
+
         # print("Decoder output Mean Size:"+ " "+str(im.size())+"\n")
         # print("Encoder output Variance Size:"+str(ivar.size())+"\n")
             return im,ivar
