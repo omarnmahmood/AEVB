@@ -136,25 +136,7 @@ class VAE_Net(nn.Module):
     def encode(self, x):
 
         # encoder part
-        if hasattr(self, 'cl1'):
-            x = F.relu(self.cl1(x))
-        if hasattr(self, 'p1'):
-            x = F.relu(self.p1(x))
-        if hasattr(self, 'cl2'):
-            x = F.relu(self.cl2(x))
-        if hasattr(self, 'p2'):
-            x = F.relu(self.p2(x))
-        if hasattr(self, 'cl3'):
-            x = F.relu(self.cl3(x))
-        if hasattr(self, 'p3'):
-            x = F.relu(self.p3(x))
-        if hasattr(self, 'cl4'):
-            x = F.relu(self.cl4(x))
-        #x = self.cl3(x)
-        #x = self.cl4(x)
-        #x = self.cl5(x)
-        #self.size_before_ap = x.size()[-1]
-        #x = nn.AvgPool2d(self.size_before_ap)(x)
+        x = self.apply_layers(x, 5, 'cl', 'p')
         x = x.view(x.size()[0], -1)#x.size()[1])
 
         o = F.tanh(self.ei(x))
@@ -175,53 +157,39 @@ class VAE_Net(nn.Module):
         im = F.sigmoid(self.dom(o))
         if self.cl_end_shape:
             im = im.view(-1, self.cl_end_shape[0], self.cl_end_shape[1], self.cl_end_shape[2])
-
-        #im = im.unsqueeze(-1).unsqueeze(-1)
-        #im = self.avg_unpool(im)
-        #im = self.dcl5(im)
-        #im = self.dcl4(im)
-        #im = self.dcl3(im)
-        if hasattr(self, 'dcl4'):
-            im = F.relu(self.dcl4(im))
-        if hasattr(self, 'up3'):
-            im = F.relu(self.up3(im))
-        if hasattr(self, 'dcl3'):
-            im = F.relu(self.dcl3(im))
-        if hasattr(self, 'up2'):
-            im = F.relu(self.up2(im))
-        if hasattr(self, 'dcl2'):
-            im = F.relu(self.dcl2(im))
-        if hasattr(self, 'up1'):
-            im = F.relu(self.up1(im))
-        if hasattr(self, 'dcl1'):
-            im = F.sigmoid(self.dcl1(im))
-        #im = self.softmax(im)
+        im = self.apply_layers(im, 5, 'dcl', 'up')
 
         if self.data == 'Frey' or self.data == 'cifar':
             ivar = self.dov(o)
 
             if self.cl_end_shape:
                 ivar = ivar.view(-1, self.cl_end_shape[0], self.cl_end_shape[1], self.cl_end_shape[2])
-            if hasattr(self, 'dcl4'):
-                ivar = F.relu(self.dcl4(ivar))
-            if hasattr(self, 'up3'):
-                ivar = F.relu(self.up3(ivar))
-            if hasattr(self, 'dcl3'):
-                ivar = F.relu(self.dcl3(ivar))
-            if hasattr(self, 'up2'):
-                ivar = F.relu(self.up2(ivar))
-            if hasattr(self, 'dcl2'):
-                ivar = F.relu(self.dcl2(ivar))
-            if hasattr(self, 'up1'):
-                ivar = F.relu(self.up1(ivar))
-            if hasattr(self, 'dcl1'):
-                ivar = F.sigmoid(self.dcl1(ivar))
+            ivar = self.apply_layers(ivar, 5, 'dcl', 'up')
 
         # print("Decoder output Mean Size:"+ " "+str(im.size())+"\n")
         # print("Encoder output Variance Size:"+str(ivar.size())+"\n")
             return im,ivar
         else:
             return im, []
+
+    def apply_layers(self, x, num_layers, conv_type, pool_type):
+        if conv_type == 'cl':
+            if hasattr(self, conv_type + '1'):
+                x = F.relu(getattr(self, conv_type + '1')(x))
+            for i in range(1, num_layers):
+                if hasattr(self, pool_type + str(i)):
+                    x = F.relu(getattr(self, pool_type + str(i))(x))
+                if hasattr(self, conv_type + str(i+1)):
+                    x = F.relu(getattr(self, conv_type + str(i+1))(x))
+        else:
+            if hasattr(self, conv_type + str(num_layers)):
+                x = F.relu(getattr(self, conv_type + str(num_layers))(x))
+            for i in range(num_layers-1, 0, -1):
+                if hasattr(self, pool_type + str(i)):
+                    x = F.relu(getattr(self, pool_type + str(i))(x))
+                if hasattr(self, conv_type + str(i)):
+                    x = F.relu(getattr(self, conv_type + str(i))(x))
+        return x
 
     def sample(self):
 
