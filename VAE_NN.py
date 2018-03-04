@@ -50,7 +50,7 @@ class VAE_Net(nn.Module):
         elif self.data == 'cifar':
             self.h = 32
             self.w = 32
-            self.u = 200
+            self.u = 500
             if False:
                 self.cl1 = nn.Conv2d(3, 48, 5)
                 self.p1 = nn.AvgPool2d(2)
@@ -188,11 +188,15 @@ class VAE_Net(nn.Module):
         else:
             if hasattr(self, conv_type + str(num_layers)):
                 x = F.relu(getattr(self, conv_type + str(num_layers))(x))
-            for i in range(num_layers-1, 0, -1):
+            for i in range(num_layers-1, 1, -1):
                 if hasattr(self, pool_type + str(i)):
                     x = F.relu(getattr(self, pool_type + str(i))(x))
                 if hasattr(self, conv_type + str(i)):
                     x = F.relu(getattr(self, conv_type + str(i))(x))
+            if hasattr(self, pool_type + '1'):
+                x = F.relu(getattr(self, pool_type + '1')(x))
+            if hasattr(self, conv_type + '1'):
+                x = F.sigmoid(getattr(self, conv_type + '1')(x))
         return x
 
     def sample(self):
