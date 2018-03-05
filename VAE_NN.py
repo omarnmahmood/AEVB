@@ -16,7 +16,7 @@ from tensorboardX import SummaryWriter
 
 #from torchvision.utils import save_image
 
-GPU = False
+GPU = True
 
 class VAE_Net(nn.Module):
     
@@ -303,7 +303,7 @@ def train(model, optimizer, train_loader, loss_func, epochs = 1, show_prog = 100
                 data = data[0]
 
             n_iter = (i*len(train_loader))+batch_idx
-            print('Reshaping image')
+            #print('Reshaping image')
             pca = PCA(pca_dim)
             original_data = data
             original_shape = data.shape
@@ -311,10 +311,10 @@ def train(model, optimizer, train_loader, loss_func, epochs = 1, show_prog = 100
             flattened_data = data[0].view(-1).numpy()
             for img in data[1:]:
                 flattened_data = np.vstack([flattened_data, img.view(-1).numpy()])
-            print('Doing PCA')
+            #print('Doing PCA')
             data = pca.fit_transform(flattened_data)
             data = torch.from_numpy(data)
-            print('Training')
+            #print('Training')
             data = Variable(data, requires_grad = False)#.view(train_loader.batch_size,-1)  # NEED TO FLATTEN THE IMAGE FILE
             if GPU:
                 original_data = original_data.cuda()
@@ -341,14 +341,16 @@ def train(model, optimizer, train_loader, loss_func, epochs = 1, show_prog = 100
                         a,_,_,_ = model(data[1].unsqueeze(0).cuda())
                     else:
                         a, _, _, _ = model(data[1].unsqueeze(0))
-                    reconstructed_image = pca.inverse_transform(a.data.numpy())
+                    reconstructed_image = pca.inverse_transform(a.data.cpu().numpy())
                     reconstructed_image = torch.from_numpy(reconstructed_image).view(-1,model.h,model.w)
                     if GPU:
                         reconstructed_image = reconstructed_image.cuda()
                     writer.add_image('reconstruction', reconstructed_image, n_iter)
                     b,_ = model.decode(model.sample().unsqueeze(0))
-                    generated_image = pca.inverse_transform(b.data.numpy())
+                    generated_image = pca.inverse_transform(b.data.cpu().numpy())
                     generated_image = torch.from_numpy(generated_image).view(-1, model.h, model.w)
+                    if GPU:
+                        generated_image = generated_image.cuda()
                     writer.add_image('from_noise', generated_image, n_iter)
 
 # initialise the weights as per the paper
