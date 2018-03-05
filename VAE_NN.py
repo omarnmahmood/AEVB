@@ -52,46 +52,35 @@ class VAE_Net(nn.Module):
         elif self.data == 'cifar':
             self.h = 32
             self.w = 32
-            self.u = 500
+            self.u = 2048
             self.ei = nn.Linear(self.pca_dim, self.u)
+            self.intermediate1 = nn.Linear(self.u, self.u)
+            self.intermediate2 = nn.Linear(self.u, self.u)
+            self.intermediate3 = nn.Linear(self.u, self.u)
+            self.em1 = nn.Linear(self.u, self.u)
+            self.em2 = nn.Linear(self.u, self.u)
+            self.ev1 = nn.Linear(self.u, self.u)
+            self.ev2 = nn.Linear(self.u, self.u)
+            self.em = nn.Linear(self.u, self.latent)
+            self.ev = nn.Linear(self.u, self.latent)
+
+            self.di = nn.Linear(self.latent, self.u)
+            self.dintermediate1 = nn.Linear(self.u, self.u)
+            self.dintermediate2 = nn.Linear(self.u, self.u)
+            self.dintermediate3 = nn.Linear(self.u, self.u)
+            self.dintermediate4 = nn.Linear(self.u, self.u)
+            self.dintermediate5 = nn.Linear(self.u, self.u)
             self.dom = nn.Linear(self.u, self.pca_dim)
+            self.dov1 = nn.Linear(self.u, self.u)
             self.dov = nn.Linear(self.u, self.pca_dim)
 
 
 
         self.latent = latent_size
 
-        self.em = nn.Linear(self.u, self.latent)
-        self.ev = nn.Linear(self.u, self.latent)
-
-        self.di = nn.Linear(self.latent, self.u)
 
 
-        """
-        self.cl1 = nn.Conv2d(1, 64, 7)#, stride=2)
-        self.p1 = nn.MaxPool2d(2)
-        self.cl2 = nn.Conv2d(64, 64, 3)
-        self.cl3 = nn.Conv2d(64, 128, 3)#, stride=2)
-        self.cl4 = nn.Conv2d(128, 256, 3)#, stride=2)
-        self.cl5 = nn.Conv2d(256, 512, 3)#, stride=2)
-        #self.avg_pool = nn.AvgPool2d(3)
 
-        self.ei = nn.Linear(512, self.u)#(self.h * self.w * 1, self.u)
-        self.em = nn.Linear(self.u, self.latent)
-        self.ev = nn.Linear(self.u, self.latent)
-
-        self.di = nn.Linear(self.latent, self.u)
-        self.dom = nn.Linear(self.u, 512)#(self.u, self.h * self.w * 1)
-
-        self.avg_unpool = nn.ConvTranspose2d(512, 512, 3)
-        self.dcl5 = nn.ConvTranspose2d(512, 256, 3)
-        self.dcl4 = nn.ConvTranspose2d(256, 128, 3)
-        self.dcl3 = nn.ConvTranspose2d(128, 64, 3)
-        self.dcl2 = nn.ConvTranspose2d(64, 64, 3)
-        self.up1 = nn.ConvTranspose2d(64, 64, 2, stride=2)#nn.MaxUnpool2d(2)
-        self.dcl1 = nn.ConvTranspose2d(64, 1, 7)
-        self.softmax = nn.Softmax2d()
-        """
 
 
     def encode(self, x):
@@ -99,8 +88,15 @@ class VAE_Net(nn.Module):
         # encoder part
 
         o = F.tanh(self.ei(x))
-        mu = self.em(o)
-        logvar = self.ev(o)
+        o = F.relu(self.intermediate1(o))
+        o = F.relu(self.intermediate2(o))
+        o = F.relu(self.intermediate3(o))
+        mu = F.relu(self.em1(o))
+        mu = F.relu(self.em2(mu))
+        mu = self.em(mu)
+        logvar = F.relu(self.ev1(o))
+        logvar = F.relu(self.ev1(logvar))
+        logvar = self.ev(logvar)
         return mu, logvar
 
     def decode(self, x):
@@ -113,10 +109,16 @@ class VAE_Net(nn.Module):
         #return im
 
         o = F.tanh(self.di(x))
+        o = F.relu(self.dintermediate1(o))
+        o = F.relu(self.dintermediate2(o))
+        o = F.relu(self.dintermediate3(o))
+        o = F.relu(self.dintermediate4(o))
+        o = F.relu(self.dintermediate5(o))
         im = F.sigmoid(self.dom(o))
 
         if self.data == 'Frey' or self.data == 'cifar':
-            ivar = self.dov(o)
+            ivar = F.relu(self.dov1(o))
+            ivar = self.dov(ivar)
 
 
         # print("Decoder output Mean Size:"+ " "+str(im.size())+"\n")
@@ -124,29 +126,6 @@ class VAE_Net(nn.Module):
             return im,ivar
         else:
             return im, []
-
-    def apply_layers(self, x, num_layers, conv_type, pool_type):
-        if conv_type == 'cl':
-            if hasattr(self, conv_type + '1'):
-                x = F.relu(getattr(self, conv_type + '1')(x))
-            for i in range(1, num_layers):
-                if hasattr(self, pool_type + str(i)):
-                    x = F.relu(getattr(self, pool_type + str(i))(x))
-                if hasattr(self, conv_type + str(i+1)):
-                    x = F.relu(getattr(self, conv_type + str(i+1))(x))
-        else:
-            if hasattr(self, conv_type + str(num_layers)):
-                x = F.relu(getattr(self, conv_type + str(num_layers))(x))
-            for i in range(num_layers-1, 1, -1):
-                if hasattr(self, pool_type + str(i)):
-                    x = F.relu(getattr(self, pool_type + str(i))(x))
-                if hasattr(self, conv_type + str(i)):
-                    x = F.relu(getattr(self, conv_type + str(i))(x))
-            if hasattr(self, pool_type + '1'):
-                x = F.relu(getattr(self, pool_type + '1')(x))
-            if hasattr(self, conv_type + '1'):
-                x = F.sigmoid(getattr(self, conv_type + '1')(x))
-        return x
 
     def sample(self):
 
