@@ -29,6 +29,7 @@ class VAE_Net(nn.Module):
         
         self.data = data
         self.pca_dim = pca_dim
+        self.latent = latent_size
 
         if self.data =='MNIST':
             self.h = 28
@@ -73,10 +74,6 @@ class VAE_Net(nn.Module):
             self.dom = nn.Linear(self.u, self.pca_dim)
             self.dov1 = nn.Linear(self.u, self.u)
             self.dov = nn.Linear(self.u, self.pca_dim)
-
-
-
-        self.latent = latent_size
 
 
 
