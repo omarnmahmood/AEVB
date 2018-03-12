@@ -3,6 +3,7 @@ import torch.utils.data
 from torch import nn, optim
 from torch.autograd import Variable
 from torch.nn import functional as F
+from torch.nn.init import xavier_normal
 from torchvision import datasets, transforms
 from tqdm import tqdm   # Progress bar
 import numpy as np
@@ -11,6 +12,7 @@ from sklearn.preprocessing import OneHotEncoder
 import os
 from urllib.request import urlopen
 from scipy.io import loadmat
+import pdb
 
 from tensorboardX import SummaryWriter
 
@@ -123,7 +125,7 @@ class VAE_Net(nn.Module):
         om, ov = self.decode(decode_info)
         return om, ov , mu, logvar
 
-def elbo_loss(enc_m, enc_v, x, dec_m, dec_v, model):
+def elbo_loss(enc_m, enc_v, x, dec_m, dec_v, model, beta = 1):
 
     # ELBO/Loss
 
@@ -150,7 +152,7 @@ def elbo_loss(enc_m, enc_v, x, dec_m, dec_v, model):
     #print('MSE loss: %.6f' % MSE_part)
     #print('Variance sum: %.6f' % dec_v.sum())
 
-    output = (Recon_total + KL_part) # ave loss per datapoint
+    output = (Recon_total + beta * KL_part) # ave loss per datapoint
 
     return(output)
 
@@ -218,10 +220,10 @@ def check_frey():
         print("Data file %s exists." % data_filename)
 
 
-def train(model, optimizer, train_loader, loss_func, epochs = 1, show_prog = 100, summary = None, test_loader = None):
+def train(model, optimizer, train_loader, loss_func, epochs = 1, show_prog = 100, summary = None, test_loader = None, scheduler = None, beta = 1):
     
     if summary:
-        writer = SummaryWriter(summary)
+        writer = SummaryWriter()
 
     ohc = OneHotEncoder(sparse=False)
     
@@ -232,8 +234,19 @@ def train(model, optimizer, train_loader, loss_func, epochs = 1, show_prog = 100
             
     #writer.add_graph_onnx(model)
     
+    # add an initial values for the likelihoods to prevent weird glitches in tensorboard
+    if summary:
+        if test_loader:
+            test_loss = get_loss(model, test_loader, loss_func, ohc)
+            writer.add_scalar('loss/ave_test_loss_per_datapoint', -test_loss, 0)
+        train_loss = get_loss(model, train_loader, loss_func, ohc)
+        writer.add_scalar('loss/ave_loss_per_datapoint', -train_loss, 0)
+    
     model.train()
     for i in tqdm(range(epochs)):
+        if scheduler:
+            scheduler.step()
+            print(optimizer.state_dict()['param_groups'][0])
         for batch_idx, (data) in enumerate(train_loader):
 
             if type(data) == list:
@@ -254,11 +267,12 @@ def train(model, optimizer, train_loader, loss_func, epochs = 1, show_prog = 100
                 data_o = data[:,:-10]
             else:
                 data_o = data
-            loss = loss_func(enc_m, enc_v, data_o, dec_m, dec_v, model) # get the loss
+            loss = loss_func(enc_m, enc_v, data_o, dec_m, dec_v, model, beta) # get the loss
             if summary:
                 # write the negative log likelihood ELBO per data point to tensorboard
+                #pdb.set_trace()
                 writer.add_scalar('loss/ave_loss_per_datapoint', -loss.data[0]/b_size, n_iter)
-                w_s = torch.cat([torch.cat(layer.weight.data) for layer in model.children()]).abs().sum()
+                #w_s = torch.cat([torch.cat(layer.weight.data) for layer in model.children()]).abs().sum()
                 #writer.add_scalar('sum of NN weights', w_s, n_iter) # check for regularisation
             loss.backward() # back prop the loss
             optimizer.step()    # increment the optimizer based on the loss (a.k.a update params)
@@ -280,22 +294,23 @@ def train(model, optimizer, train_loader, loss_func, epochs = 1, show_prog = 100
                         b,_ = model.decode(model.sample())
                     writer.add_image('from_noise', b.view(-1,model.h,model.w), n_iter)
         if test_loader and summary:
-            test_loss = get_test_loss(model, test_loader, loss_func, ohc)
-            writer.add_scalar('loss/ave_test_loss_per_datapoint', -test_loss, n_iter)
+            test_loss = get_loss(model, test_loader, loss_func, ohc)
+            writer.add_scalar('loss/ave_test_loss_per_datapoint', -test_loss, n_iter + b_size)
 
-def get_test_loss(model, test_loader, loss_func, one_hot_encoder):
+# return the loss over a dataset held in a dataloader
+def get_loss(model, data_loader, loss_func, one_hot_encoder):
 
-    b_size = float(test_loader.batch_size)
+    b_size = float(data_loader.batch_size)
 
     loss = []    
 
-    for batch_idx, (data) in enumerate(test_loader):
+    for batch_idx, (data) in enumerate(data_loader):
         
         if type(data) == list:
             label = data[1]
             data = data[0]
 
-        data = Variable(data.view(test_loader.batch_size,-1), requires_grad = False)
+        data = Variable(data.view(data_loader.batch_size,-1), requires_grad = False)
         if model.conditional:
             label = Variable(torch.Tensor(one_hot_encoder.transform(label.numpy().reshape(len(label), 1))))
             data = torch.cat([data,label],dim=1)
@@ -315,3 +330,8 @@ def init_weights(m):
     #print(m)
     if type(m) == nn.Linear:
         m.weight.data.normal_(0.0,0.01)
+
+def init_weights_xavier(m):
+    print("Messing with weights Xavier")
+    if type(m) == nn.Linear:
+        xavier_normal(m.weight)

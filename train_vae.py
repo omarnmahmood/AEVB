@@ -10,11 +10,7 @@ from torchvision import datasets, transforms
 import time
 
 from torch.optim import Adam, Adagrad, SGD
-
-# TODO: Make this work with the dataloader that Prof. Shen created
-
-#from load_data import load_data
-
+from torch.optim.lr_scheduler import MultiStepLR
 
 def parse_args():
     parser = argparse.ArgumentParser()
@@ -45,10 +41,10 @@ def parse_args():
                         help='also benchmark against test')
     parser.add_argument('--conditional', type=bool, default=False,
                         help='use label data (if available)')
+    parser.add_argument('--IWAE_mode', type=bool, default=True,
+                        help='use IWAE paper settings (ignores all other settings)')
     #parser.add_argument('--checkpoint_freq', type=int, default=100,
     #                    help='frequency (in epochs) with which we save model checkpoints (default: 100)')
-
-    # also allow specification of optimizer to use?
     parser.add_argument('--optimiser', type=str, default='Adam',
                         help = 'choose the optimiser')
     parser.add_argument('--lr', type=float, default=1e-3, help='learning rate (default: 1e-3)')
@@ -86,13 +82,25 @@ if __name__ == "__main__":
     elif args.optimiser == 'Adagrad':
         optimizer = Adagrad(vae_n.parameters(),lr=args.lr)
 
-    train_data,test_data = VAE_NN.get_data_loaders(b_size=args.batch_size,data=args.dataset)
+    batch_size = args.batch_size  
+    dataset = args.dataset  
 
-    if not args.test:
+    lr_scheduler = None
+
+    if args.IWAE_mode:
+        batch_size = 20
+        dataset = 'MNIST'
+        optimizer = Adam(vae_n.parameters(),lr=1e-3, betas=(0.9, 0.999), eps=1e-4)
+        lr_scheduler = MultiStepLR(optimizer, milestones=[3,9,27,81,243,729,2187], gamma=10**(-1/7))
+        vae_n.apply(VAE_NN.init_weights_xavier)
+
+    train_data,test_data = VAE_NN.get_data_loaders(b_size=batch_size,data=dataset)
+
+    if not args.test and not args.IWAE_mode:
         test_data = None
 
     t = time.time()
 
-    VAE_NN.train(vae_n,optimizer,train_data, VAE_NN.elbo_loss, epochs = args.num_epochs, summary = summary_dir, test_loader = test_data)
+    VAE_NN.train(vae_n,optimizer,train_data, VAE_NN.elbo_loss, epochs = args.num_epochs, summary = summary_dir, test_loader = test_data, scheduler = lr_scheduler)
     t_e = time.time() - t
     print('Seconds for %d epcohs: %d' % (args.num_epochs,t_e))
