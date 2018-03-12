@@ -27,7 +27,7 @@ def parse_args():
     # ISSUE: any way to add ability to specify encoder/decoder architectures?
     # parser.add_argument('--hparams_file', type=str, default='./hparams.json',
     #                     help='JSON file specifying the hyperparameters for training and record keeping')
-    parser.add_argument('--experiment_dir', type=str, default='./experiment',
+    parser.add_argument('--experiment_dir', type=str, default='./runs',
                         help='directory to which to output training summary and checkpoint files')
 
     #parser.add_argument('--seed', type=int, default=123, help='seed for rng (default: 123)')
