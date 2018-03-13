@@ -13,7 +13,7 @@ Different Writing Styles conditioned on Noise and Digit (CVAE mode):
 <img src="Images/imagecvae3.png  " alt="Style 3" style="width: 200px;"/>
 
 Frey Face Latent Plot:
-![Frey Face](Images/Frey_4.png?raw=true "Latent Plot: Frey")
+<img src="Images/Frey_4.png" alt="Latent Plot: Frey"/>
 
 MNIST Latent Plot:
-![MNIST](Images/MNIST.png?raw=true "Latent Plot: MNIST")
+<img src="Images/MNIST.png" alt="Latent Plot: MNIST"/>
